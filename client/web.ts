@@ -26,6 +26,9 @@ const ROW = '[data-testid="workspace-tabs-row"]';
 const SCROLL = '[data-testid="workspace-tabs-scroll"]';
 const TAB = 'button[data-testid^="workspace-tab-"][aria-selected]';
 const UI = "data-paseo-tabs-ui";
+// The right panel (Files, Changes, plugin panels) has its own strip: desktop sidebar, native dock, explorer pane.
+const EXPLORER =
+  '[data-testid="workspace-explorer-sidebar"],[data-testid="native-explorer-sidebar-dock"],[data-testid="workspace-pane-explorer"]';
 const EDGE = 44;
 
 const css = `
@@ -245,7 +248,7 @@ function start(): () => void {
     const row = scroll.closest(ROW);
     // Unknown layout: keep the native strip untouched. Explorer tabs (Files, Changes) are few, leave them native.
     if (!parent || !row || parent.parentElement !== row) return null;
-    if (scroll.closest('[data-testid="workspace-pane-explorer"]')) return null;
+    if (scroll.closest(EXPLORER)) return null;
     scroll.setAttribute("data-paseo-tabs", "");
     const left = el("span", "pt-edge pt-left");
     const right = el("span", "pt-edge pt-right");

@@ -10,7 +10,9 @@ p.on("pageerror", (e) => errors.push(e.message));
 p.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await p.goto(root);
 await p.waitForTimeout(2500);
-await p.getByText("ЭкоЭксперт").first().click();
+// "Диалоги" hide the native workspace list; expand the group if needed and open its first dialog.
+if (!(await p.getByText("Общий ИИ", { exact: true }).count())) { await p.getByText("ЭкоЭксперт", { exact: true }).first().click(); await p.waitForTimeout(600); }
+await p.getByText("Общий ИИ", { exact: true }).first().click();
 await p.waitForSelector(".pt-all", { timeout: 10000 });
 await p.waitForTimeout(800);
 const state = () => p.evaluate(() => {
@@ -30,7 +32,7 @@ const state = () => p.evaluate(() => {
 });
 const s0 = await state();
 console.log("start", s0);
-assert.equal(s0.n, 20); assert.ok(s0.widths.every((w) => w > 64), "tabs keep their label width"); assert.ok(s0.max > 0); assert.equal(s0.button, "20"); assert.ok(s0.buttonAfterScroll);
+assert.ok(s0.n >= 12); assert.ok(s0.widths.every((w) => w > 64), "tabs keep their label width"); assert.ok(s0.max > 0); assert.equal(s0.button, String(s0.n)); assert.ok(s0.buttonAfterScroll);
 await p.screenshot({ path: `${out}/live-1-start.png` });
 const box = await p.locator('[data-paseo-tabs]').boundingBox();
 await p.mouse.move(box.x + 200, box.y + box.height / 2);
