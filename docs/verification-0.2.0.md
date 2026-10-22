@@ -27,3 +27,9 @@
 
 Снимки: `docs/shots/0.2.0/tab-pair.png` (вкладка) и `dialogs-pair.png` (строка Диалогов) рядом, `1-open.png`,
 `3-subagent-tab.png`, `4-collapsed.png`, `5-edge.png`, `5-edge-crop.png`, `6-list.png`.
+
+Основная Paseo (22.10.2026, 16:04): клон `/Users/agmazin/Library/Developer/paseo-releases/paseo-tabs` переключён на v0.2.0,
+бэкап прежнего клона - `/Users/agmazin/Library/Developer/paseo-releases/backup-20261022-160425`, `paseo plugin reload paseo-tabs`
+-> running, Paseo.app и демон не перезапускались. Снимок окна в фоне (`screencapture -x -l`, без активации):
+`docs/shots/0.2.0/main-paseo.png`, крупно лента - `main-paseo-tabs.png`, строки Диалогов - `main-paseo-dialogs.png`:
+пара на вкладках "AGM-6: Бэкапы" и "AGM-7" совпадает с парой у тех же чатов в Диалогах.
