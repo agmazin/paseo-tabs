@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { flag, hiddenSides, highlight, jumpHint, matches, revealTarget, tabsWord, wheelDelta } from "../shared/model.ts";
+import { agentIdOf, flag, hiddenSides, runningDescendants, tabBucket, highlight, jumpHint, matches, revealTarget, tabsWord, wheelDelta } from "../shared/model.ts";
 
 const tabs = Array.from({ length: 10 }, (_, i) => ({ id: `t${i}`, left: i * 100, width: 96 }));
 
@@ -24,6 +24,35 @@ test("flag picks the most important hidden status", () => {
   assert.equal(flag(["done", "running"]), null);
   assert.equal(flag(["attention", "failed"]), "failed");
   assert.equal(flag(["attention", "needs_input", "failed"]), "needs_input");
+  assert.equal(flag(["attention", "subagents"]), "subagents");
+  assert.equal(flag(["subagents", "failed"]), "failed");
+});
+
+test("running descendants count up the whole parent chain", () => {
+  const counts = runningDescendants([
+    { id: "chat", status: "idle" },
+    { id: "a", status: "running", parentAgentId: "chat" },
+    { id: "b", status: "idle", parentAgentId: "chat" },
+    { id: "c", status: "running", labels: { "paseo.parent-agent-id": "b" } },
+    { id: "d", status: "running", parentAgentId: "chat", archivedAt: "2026-10-22" },
+    { id: "x", status: "running", parentAgentId: "y" },
+    { id: "y", status: "running", parentAgentId: "x" },
+  ]);
+  assert.equal(counts.get("chat"), 2);
+  assert.equal(counts.get("b"), 1);
+  assert.equal(counts.get("a"), undefined);
+  assert.equal(counts.get("x"), 1);
+});
+
+test("a resting chat gives way to its subagents, other statuses stay native", () => {
+  assert.equal(tabBucket("done", 2), "subagents");
+  assert.equal(tabBucket("attention", 1), "subagents");
+  assert.equal(tabBucket("running", 3), "running");
+  assert.equal(tabBucket("needs_input", 1), "needs_input");
+  assert.equal(tabBucket("failed", 1), "failed");
+  assert.equal(tabBucket("done", 0), "done");
+  assert.equal(agentIdOf("workspace-tab-agent_abc-1"), "abc-1");
+  assert.equal(agentIdOf("workspace-tab-terminal_1"), null);
 });
 
 test("vertical wheel scrolls horizontally, trackpad sideways stays native", () => {

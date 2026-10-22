@@ -1,0 +1,133 @@
+{
+ "tab": {
+  "title": "Работают подагенты: 2",
+  "width": 160,
+  "icon": {
+   "x": 8,
+   "y": 7,
+   "w": 14,
+   "h": 14
+  },
+  "labelX": 26,
+  "nativeBadge": []
+ },
+ "tabs": [
+  {
+   "dot": {
+    "cx": 7.5,
+    "cy": 13.5,
+    "w": 5,
+    "h": 5
+   },
+   "cut": {
+    "inset": "-2.5px",
+    "bg": "rgb(39, 42, 41)",
+    "border": "0px",
+    "top": "rgb(0, 0, 0)",
+    "side": "rgb(0, 0, 0)",
+    "anim": "0s ease"
+   },
+   "ring": {
+    "inset": "-2.5px",
+    "bg": "rgba(0, 0, 0, 0)",
+    "border": "1px",
+    "top": "rgb(92, 170, 246)",
+    "side": "rgba(92, 170, 246, 0.2)",
+    "anim": "0.9s linear"
+   }
+  },
+  {
+   "dot": {
+    "cx": 14.5,
+    "cy": 13.5,
+    "w": 5,
+    "h": 5
+   },
+   "cut": {
+    "inset": "-2.5px",
+    "bg": "rgb(39, 42, 41)",
+    "border": "0px",
+    "top": "rgb(0, 0, 0)",
+    "side": "rgb(0, 0, 0)",
+    "anim": "0s ease"
+   },
+   "ring": {
+    "inset": "-2.5px",
+    "bg": "rgba(0, 0, 0, 0)",
+    "border": "1px",
+    "top": "rgb(92, 170, 246)",
+    "side": "rgba(92, 170, 246, 0.2)",
+    "anim": "0.9s linear"
+   }
+  }
+ ],
+ "dialogs": [
+  {
+   "dot": {
+    "cx": 12.5,
+    "cy": 15.5,
+    "w": 5,
+    "h": 5
+   },
+   "cut": {
+    "cx": 12.5,
+    "cy": 15.5,
+    "w": 10,
+    "h": 10
+   },
+   "ring": {
+    "border": "1px",
+    "top": "rgb(92, 170, 246)",
+    "side": "rgba(92, 170, 246, 0.2)"
+   }
+  },
+  {
+   "dot": {
+    "cx": 19.5,
+    "cy": 15.5,
+    "w": 5,
+    "h": 5
+   },
+   "cut": {
+    "cx": 19.5,
+    "cy": 15.5,
+    "w": 10,
+    "h": 10
+   },
+   "ring": {
+    "border": "1px",
+    "top": "rgb(92, 170, 246)",
+    "side": "rgba(92, 170, 246, 0.2)"
+   }
+  }
+ ],
+ "dialogsIcon": {
+  "w": 16,
+  "h": 16
+ },
+ "dialogsHint": "Работают подагенты: 2",
+ "spins": [
+  0,
+  0
+ ],
+ "widths": [
+  160,
+  160
+ ],
+ "sub": {
+  "bucket": "running",
+  "pair": false,
+  "busy": false
+ },
+ "edge": {
+  "left": "pt-flag pt-flag-subagents",
+  "right": null,
+  "leftTitle": "7 вкладок слева. Работают подагенты: Индикатор подагентов",
+  "button": "pt-flag pt-flag-subagents"
+ },
+ "list": {
+  "pair": 2,
+  "title": "Работают подагенты: 2",
+  "nativeHidden": true
+ }
+}

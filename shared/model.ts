@@ -1,6 +1,7 @@
 // Pure tab-strip logic shared by the web adapter and the tests.
 
-export type Bucket = "needs_input" | "failed" | "running" | "attention" | "done";
+// "subagents" is the plugin's own: the chat itself rests while its subagents work.
+export type Bucket = "needs_input" | "failed" | "running" | "subagents" | "attention" | "done";
 
 export interface TabBox {
   id: string;
@@ -9,7 +10,7 @@ export interface TabBox {
 }
 
 // Statuses worth flagging when the tab is out of sight, most important first.
-const FLAG_ORDER: Bucket[] = ["needs_input", "failed", "attention"];
+const FLAG_ORDER: Bucket[] = ["needs_input", "failed", "subagents", "attention"];
 
 export function flag(buckets: readonly string[]): Bucket | null {
   for (const bucket of FLAG_ORDER) if (buckets.includes(bucket)) return bucket;
@@ -86,3 +87,38 @@ export function jumpHint(index: number, mac: boolean, desktop: boolean) {
   if (desktop) return mac ? `⌘⌥${n}` : `Alt+${n}`;
   return mac ? `⌥⇧${n}` : `Alt+Shift+${n}`;
 }
+
+export interface AgentLink {
+  id: string;
+  status: string;
+  parentAgentId?: string | null;
+  archivedAt?: string | null;
+  labels?: Readonly<Record<string, string>>;
+}
+
+export const parentOf = (a: AgentLink) => a.parentAgentId || a.labels?.["paseo.parent-agent-id"] || null;
+
+// Running descendants (subagents, their subagents) per ancestor id.
+export function runningDescendants(agents: Iterable<AgentLink>) {
+  const byId = new Map<string, AgentLink>();
+  for (const a of agents) byId.set(a.id, a);
+  const counts = new Map<string, number>();
+  for (const a of byId.values()) {
+    if (a.status !== "running" || a.archivedAt) continue;
+    const seen = new Set([a.id]);
+    for (let up = parentOf(a); up && !seen.has(up); up = byId.get(up) ? parentOf(byId.get(up)!) : null) {
+      seen.add(up);
+      counts.set(up, (counts.get(up) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+// Permission, error and the chat's own run keep the native badge; a resting chat gives way to its subagents.
+export function tabBucket(native: string, busy: number): string {
+  if (busy > 0 && (native === "done" || native === "attention")) return "subagents";
+  return native;
+}
+
+export const agentIdOf = (testId: string) =>
+  testId.startsWith("workspace-tab-agent_") ? testId.slice("workspace-tab-agent_".length) : null;

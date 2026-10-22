@@ -4,12 +4,17 @@ import assert from "node:assert/strict";
 const root = "http://127.0.0.1:6793";
 const out = process.argv[2] || "/tmp/paseo-tabs-check";
 const b = await chromium.launch({ headless: true, channel: "chrome" });
+// "Диалоги" hide the native workspace list: expand the group if needed and open a dialog.
+const openChat = async (p) => {
+  if (!(await p.getByText("Общий ИИ", { exact: true }).count())) { await p.getByText("ЭкоЭксперт", { exact: true }).first().click(); await p.waitForTimeout(600); }
+  await p.getByText("Общий ИИ", { exact: true }).first().click();
+};
 const order = (p) => p.$$eval('[data-paseo-tabs] button[aria-selected]', (n) => n.map((x) => x.getAttribute("data-testid").slice(14, 26)));
 {
   const p = await b.newPage({ viewport: { width: 1560, height: 975 }, colorScheme: "dark" });
   const errors = []; p.on("pageerror", (e) => errors.push(e.message));
   await p.goto(root); await p.waitForTimeout(2500);
-  await p.getByText("ЭкоЭксперт").first().click(); await p.waitForSelector(".pt-all"); await p.waitForTimeout(800);
+  await openChat(p); await p.waitForSelector(".pt-all"); await p.waitForTimeout(800);
   const before = await order(p);
   const tabs = p.locator('[data-paseo-tabs] button[aria-selected]');
   const from = await tabs.nth(1).boundingBox(), to = await tabs.nth(4).boundingBox();
@@ -36,7 +41,7 @@ const order = (p) => p.$$eval('[data-paseo-tabs] button[aria-selected]', (n) => 
 {
   const p = await b.newPage({ viewport: { width: 1560, height: 975 }, colorScheme: "light" });
   await p.goto(root); await p.waitForTimeout(2500);
-  await p.getByText("ЭкоЭксперт").first().click(); await p.waitForSelector(".pt-all"); await p.waitForTimeout(800);
+  await openChat(p); await p.waitForSelector(".pt-all"); await p.waitForTimeout(800);
   const box = await p.locator("[data-paseo-tabs]").boundingBox();
   await p.mouse.move(box.x + 300, box.y + 15); await p.mouse.wheel(0, 600); await p.waitForTimeout(400);
   await p.click(".pt-all"); await p.waitForTimeout(300);

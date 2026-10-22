@@ -1,15 +1,23 @@
+import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { Platform } from "react-native";
 import {
+  agentIdOf,
   flag,
   hiddenSides,
   highlight,
   jumpHint,
   matches,
+  parentOf,
   revealTarget,
+  runningDescendants,
+  tabBucket,
   tabsWord,
   wheelDelta,
+  type AgentLink,
   type TabBox,
 } from "../shared/model";
+
+type Paseo = PluginClientContext["paseo"];
 
 // DOM is restricted to this module. Paseo 0.12 has no plugin API for the workspace tab strip,
 // so the adapter reads its accessible markers and fails open when they disappear.
@@ -21,6 +29,7 @@ declare const ResizeObserver: any;
 declare const requestAnimationFrame: (fn: () => void) => number;
 declare const cancelAnimationFrame: (id: number) => void;
 declare const Element: any;
+declare const performance: { now(): number };
 
 const ROW = '[data-testid="workspace-tabs-row"]';
 const SCROLL = '[data-testid="workspace-tabs-scroll"]';
@@ -46,10 +55,24 @@ ${SCROLL}[data-paseo-tabs]::-webkit-scrollbar{display:none}
 .pt-flag-needs_input::after{content:"!"}
 .pt-flag-failed{width:8px;height:8px;background:var(--colors-status-dot-danger,#f7796d)}
 .pt-flag-attention{width:8px;height:8px;background:var(--colors-status-dot-success,#35c264)}
+.pt-pair,.pt-flag-subagents{display:inline-flex;gap:2px;--pt-cut:var(--colors-surface0,#181b1a)}
+.pt-pair{position:absolute;left:5px;top:11px;pointer-events:none}
+${TAB}[aria-selected="true"] .pt-pair{--pt-cut:var(--colors-surface2,#272a29)}
+.pt-flag.pt-flag-subagents{width:12px;height:5px;border-radius:0;margin:0 2.5px;--pt-cut:var(--colors-surface2,#272a29)}
+.pt-mini{position:relative;width:5px;height:5px;flex:0 0 5px}
+.pt-mini::before,.pt-mini::after,.pt-mini i{content:"";position:absolute;inset:-2.5px;border-radius:50%;box-sizing:border-box}
+.pt-mini::before{background:var(--pt-cut)}
+.pt-mini i{inset:0;background:var(--colors-status-dot-running,#5caaf6)}
+.pt-mini::after{border:1.2px solid rgba(92,170,246,.2);border-top-color:var(--colors-status-dot-running,#5caaf6);animation:pt-spin .9s linear infinite}
+@keyframes pt-spin{to{transform:rotate(360deg)}}
+[data-pt-busy] [data-status-bucket]>:first-child>:first-child>div,.pt-ico[data-pt-busy]>:first-child>:first-child>div{display:none}
 .pt-all{position:relative;display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;align-self:center;height:28px;margin:0 2px 0 4px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--colors-foreground-muted,#a1a5a4);font-size:13px;font-variant-numeric:tabular-nums;cursor:pointer}
 .pt-all:hover,.pt-all.pt-open{background:var(--colors-surface2,#272a29);color:var(--colors-foreground,#fafafa)}
 .pt-all .pt-flag{position:absolute;top:2px;left:16px;box-shadow:0 0 0 1.6px var(--colors-surface0,#181b1a)}
 .pt-all .pt-flag-needs_input{width:12px;height:12px;line-height:12px;font-size:9px}
+.pt-all .pt-flag-subagents{top:4px;left:15px;box-shadow:none;--pt-cut:var(--colors-surface0,#181b1a)}
+.pt-all:hover .pt-flag-subagents,.pt-all.pt-open .pt-flag-subagents{--pt-cut:var(--colors-surface2,#272a29)}
+.pt-row .pt-pair{--pt-cut:var(--colors-popover,#272a29)}
 .pt-pop{position:fixed;z-index:10000;width:380px;display:flex;flex-direction:column;overflow:hidden;background:var(--colors-popover,#272a29);color:var(--colors-popover-foreground,#fafafa);border:1px solid var(--colors-border,#252b2a);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.45);font-size:14px}
 .pt-search{display:flex;align-items:center;gap:8px;margin:8px;padding:0 10px;height:36px;border-radius:8px;background:var(--colors-surface1,#1e2120);border:1px solid var(--colors-border,#252b2a)}
 .pt-search svg{width:15px;height:15px;flex:0 0 15px;stroke:var(--colors-foreground-extra-muted,#717574);fill:none;stroke-width:2;stroke-linecap:round}
@@ -84,6 +107,7 @@ interface Tab {
   id: string;
   label: string;
   bucket: string;
+  busy: number;
   selected: boolean;
 }
 interface Strip {
@@ -108,6 +132,13 @@ interface Popup {
   dispose(): void;
 }
 
+const flagHtml = (marker: string | null) =>
+  !marker
+    ? ""
+    : marker === "subagents"
+      ? `<i class="pt-flag pt-flag-subagents" aria-hidden="true">${pairHtml}</i>`
+      : `<i class="pt-flag pt-flag-${marker}"></i>`;
+
 function el(tag: string, cls: string, html?: string) {
   const node = document.createElement(tag);
   node.className = cls;
@@ -123,12 +154,20 @@ function setHtml(node: any, html: string) {
   node.innerHTML = html;
 }
 
+// Running descendants per agent id, recomputed on every scan from the agent sources.
+let busyById = new Map<string, number>();
+
 function readTab(node: any): Tab {
+  const id = node.getAttribute("data-testid");
+  const agent = agentIdOf(id);
+  const busy = (agent && busyById.get(agent)) || 0;
+  const native = node.querySelector("[data-status-bucket]")?.getAttribute("data-status-bucket") ?? "done";
   return {
     node,
-    id: node.getAttribute("data-testid"),
+    id,
     label: node.getAttribute("aria-label") || node.textContent.trim(),
-    bucket: node.querySelector("[data-status-bucket]")?.getAttribute("data-status-bucket") ?? "done",
+    bucket: tabBucket(native, busy),
+    busy,
     selected: node.getAttribute("aria-selected") === "true",
   };
 }
@@ -137,6 +176,95 @@ function tabsOf(strip: Strip): Tab[] {
   return [...strip.scroll.querySelectorAll(TAB)]
     .filter((node: any) => node.getClientRects().length > 0)
     .map(readTab);
+}
+
+const pairHtml = '<span class="pt-mini"><i></i></span><span class="pt-mini"><i></i></span>';
+const busyHint = (n: number) => `Работают подагенты: ${n}`;
+
+// Every spinner of the plugin turns in one phase: all pt-spin animations share start time 0.
+function syncSpin() {
+  for (const animation of document.getAnimations())
+    if (animation.animationName === "pt-spin" && animation.startTime !== 0) animation.startTime = 0;
+}
+
+// The pair takes the native badge's place at the tab icon; absolute, so the tab width stays put.
+function paintTab(tab: Tab) {
+  const node = tab.node;
+  const icon = node.querySelector("[data-status-bucket]")?.firstElementChild;
+  if (tab.bucket === "subagents" && icon) {
+    let pair = node.__ptPair;
+    if (!pair) {
+      pair = node.__ptPair = el("span", "pt-pair", pairHtml);
+      pair.setAttribute("aria-hidden", "true");
+    }
+    if (pair.parentElement !== icon) icon.append(pair);
+    if (!node.hasAttribute("data-pt-busy")) node.setAttribute("data-pt-busy", "");
+    const hint = busyHint(tab.busy);
+    if (node.title !== hint) node.title = hint;
+    node.__ptTitle = true;
+    return;
+  }
+  clearTab(node);
+}
+
+function clearTab(node: any) {
+  node.__ptPair?.remove();
+  if (node.hasAttribute("data-pt-busy")) node.removeAttribute("data-pt-busy");
+  if (node.__ptTitle) node.removeAttribute("title");
+  node.__ptTitle = false;
+}
+
+const keep = (a: AgentLink): AgentLink => ({
+  id: a.id,
+  status: a.status,
+  parentAgentId: parentOf(a),
+  archivedAt: a.archivedAt ?? null,
+});
+
+// Agents of one host: a full read once a minute, agent updates in between.
+function watchAgents(paseo: Paseo, source: Map<string, AgentLink>, changed: () => void) {
+  let alive = true;
+  let release: (() => void) | undefined;
+  let warned = false;
+  const load = async () => {
+    try {
+      const all = new Map<string, AgentLink>();
+      let cursor: string | undefined;
+      do {
+        const r = await paseo.agents.list({ page: { limit: 200, cursor } });
+        for (const { agent } of r.entries) all.set(agent.id, keep(agent));
+        cursor = r.pageInfo.nextCursor ?? undefined;
+      } while (cursor);
+      if (!alive) return;
+      source.clear();
+      for (const [id, a] of all) source.set(id, a);
+      changed();
+    } catch {
+      if (!warned) console.error("Вкладки: список агентов недоступен, индикатор подагентов выключен");
+      warned = true;
+    }
+  };
+  const off = paseo.agents.subscribe((update) => {
+    if (update.kind === "upsert") source.set(update.agent.id, keep(update.agent));
+    else source.delete(update.agentId);
+    changed();
+  });
+  // One owned subscription makes the daemon push agent updates to this client.
+  paseo.agents
+    .list({ page: { limit: 1 }, subscribe: {} })
+    .then((r) => {
+      if (alive) release = () => r.subscription.release();
+      else r.subscription.release();
+    })
+    .catch(() => {});
+  void load();
+  const timer = setInterval(() => void load(), 60_000);
+  return () => {
+    alive = false;
+    off();
+    release?.();
+    clearInterval(timer);
+  };
 }
 
 // React Native Web replaces scrollTo/scrollBy on ScrollView nodes with its own {x, animated} signature.
@@ -151,32 +279,47 @@ function boxOf(strip: Strip, tab: Tab): TabBox {
   return { id: tab.id, left: rect.left - origin.left + strip.scroll.scrollLeft, width: rect.width };
 }
 
+interface Shared {
+  count: number;
+  dispose: () => void;
+  // One agent source per host that loaded the plugin; tab ids carry agent ids, unique across hosts.
+  sources: Set<Map<string, AgentLink>>;
+  notify: () => void;
+}
+
 function shared() {
-  const host = window as { __paseoTabs?: { count: number; dispose: () => void } };
+  const host = window as { __paseoTabs?: Shared };
   return host;
 }
 
-export function mountTabs(): () => void {
+export function mountTabs(paseo: Paseo): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   // One adapter per window even when several hosts load the plugin.
   const host = shared();
-  if (host.__paseoTabs) {
-    host.__paseoTabs.count++;
-  } else {
-    host.__paseoTabs = { count: 1, dispose: start() };
+  if (!host.__paseoTabs) {
+    const fresh: Shared = { count: 0, dispose: () => {}, sources: new Set(), notify: () => {} };
+    host.__paseoTabs = fresh;
+    fresh.dispose = start(fresh);
   }
+  const state = host.__paseoTabs;
+  state.count++;
+  const source = new Map<string, AgentLink>();
+  state.sources.add(source);
+  const stopWatch = watchAgents(paseo, source, () => state.notify());
   let released = false;
   return () => {
-    const state = host.__paseoTabs;
-    if (released || !state) return;
+    if (released) return;
     released = true;
+    stopWatch();
+    state.sources.delete(source);
+    state.notify();
     if (--state.count > 0) return;
     state.dispose();
-    delete host.__paseoTabs;
+    if (host.__paseoTabs === state) delete host.__paseoTabs;
   };
 }
 
-function start(): () => void {
+function start(state: Shared): () => void {
   const style = el("style", "");
   style.textContent = css;
   document.head.append(style);
@@ -206,17 +349,20 @@ function start(): () => void {
     node.classList.toggle("pt-show", show);
     if (!show) return;
     const marker = flag(tabs.map((t) => t.bucket));
-    const mark = marker ? `<i class="pt-flag pt-flag-${marker}"></i>` : "";
+    const mark = flagHtml(marker);
     const count = `<span>${tabs.length}</span>`;
     setHtml(node, side === "left" ? svg("left") + mark + count : count + mark + svg("right"));
     const waiting = tabs.filter((t) => t.bucket === "needs_input").map((t) => t.label);
+    const busy = tabs.filter((t) => t.bucket === "subagents").map((t) => t.label);
     node.title =
       `${tabs.length} ${tabsWord(tabs.length)} ${side === "left" ? "слева" : "справа"}` +
-      (waiting.length ? `. Ждут ответа: ${waiting.join(", ")}` : "");
+      (waiting.length ? `. Ждут ответа: ${waiting.join(", ")}` : "") +
+      (busy.length ? `. Работают подагенты: ${busy.join(", ")}` : "");
   }
 
   function update(strip: Strip) {
     const tabs = tabsOf(strip);
+    for (const tab of tabs) paintTab(tab);
     const current = tabs.find((t) => t.selected)?.id ?? null;
     if (current !== strip.selected && !dragging()) {
       const first = strip.selected === undefined;
@@ -237,7 +383,7 @@ function start(): () => void {
     const marker = flag([...left, ...right].map((t) => t.bucket));
     setHtml(
       strip.button,
-      svg("list") + `<span>${tabs.length}</span>` + (marker ? `<i class="pt-flag pt-flag-${marker}"></i>` : ""),
+      svg("list") + `<span>${tabs.length}</span>` + flagHtml(marker),
     );
     strip.button.title = `Все вкладки: ${tabs.length}`;
     strip.button.setAttribute("aria-label", strip.button.title);
@@ -290,6 +436,7 @@ function start(): () => void {
       left.remove();
       right.remove();
       button.remove();
+      for (const node of scroll.querySelectorAll(TAB)) clearTab(node);
       scroll.removeAttribute("data-paseo-tabs");
     };
     return strip;
@@ -297,6 +444,9 @@ function start(): () => void {
 
   function scan() {
     if (disposed) return;
+    const agents: AgentLink[] = [];
+    for (const source of state.sources) agents.push(...source.values());
+    busyById = runningDescendants(agents);
     const found = new Set<any>(
       [...document.querySelectorAll(SCROLL)].filter((n: any) => n.getClientRects().length > 0),
     );
@@ -319,6 +469,7 @@ function start(): () => void {
       update(strip);
     }
     if (popup) refreshPopup(false);
+    syncSpin();
   }
 
   function schedule() {
@@ -339,6 +490,7 @@ function start(): () => void {
       p.list.append(el("div", "pt-empty", "Ничего не нашлось"));
       return;
     }
+    queueMicrotask(syncSpin);
     p.shown.forEach((tab, i) => {
       const row = el("div", `pt-row${i === p.sel ? " pt-sel" : ""}${tab.selected ? " pt-cur" : ""}`);
       row.setAttribute("data-tab", tab.id);
@@ -346,6 +498,10 @@ function start(): () => void {
       // The status wrapper also holds the label; clone only its icon with the native badge.
       const native = tab.node.querySelector("[data-status-bucket]")?.firstElementChild;
       if (native) ico.append(native.cloneNode(true));
+      if (tab.bucket === "subagents") {
+        ico.setAttribute("data-pt-busy", "");
+        row.title = busyHint(tab.busy);
+      }
       const label = el("span", "pt-label");
       const [a, b, c] = highlight(tab.label, p.query);
       label.append(document.createTextNode(a));
@@ -367,7 +523,7 @@ function start(): () => void {
   function refreshPopup(scrollToSel: boolean) {
     if (!popup) return;
     const signature = tabsOf(popup.strip)
-      .map((t) => `${t.id}:${t.label}:${t.bucket}:${t.selected}`)
+      .map((t) => `${t.id}:${t.label}:${t.bucket}:${t.busy}:${t.selected}`)
       .join("|");
     if (signature !== popup.signature || scrollToSel) {
       popup.signature = signature;
@@ -505,9 +661,11 @@ function start(): () => void {
     attributeFilter: ["aria-selected", "aria-label", "data-status-bucket", "data-testid"],
   });
   window.addEventListener("resize", schedule);
+  state.notify = schedule;
   schedule();
   return () => {
     disposed = true;
+    state.notify = () => {};
     if (frame !== null) cancelAnimationFrame(frame);
     observer.disconnect();
     resize.disconnect();
