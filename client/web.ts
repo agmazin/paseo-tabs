@@ -39,11 +39,16 @@ const UI = "data-paseo-tabs-ui";
 const EXPLORER =
   '[data-testid="workspace-explorer-sidebar"],[data-testid="native-explorer-sidebar-dock"],[data-testid="workspace-pane-explorer"]';
 const EDGE = 44;
+// Paseo's own "+" (new tab: agent with Claude or Codex, terminal...) is the last child of the scrolled strip.
+// Native tabs shrink so it stays in view; ours keep their width and scroll, so it is pinned to the right edge.
+const PLUS = '[data-testid="workspace-new-tab-button"]';
 
 const css = `
 ${SCROLL}[data-paseo-tabs]{overflow-x:auto!important;scrollbar-width:none!important}
 ${SCROLL}[data-paseo-tabs]::-webkit-scrollbar{display:none}
 [data-paseo-tabs] ${TAB}{width:auto!important;min-width:64px!important;max-width:160px!important}
+[data-paseo-tabs] div:has(> ${PLUS}){position:sticky!important;right:0;z-index:6;flex-shrink:0;background:var(--colors-surface0,#181b1a)}
+[data-paseo-tabs][data-pt-overflow] div:has(> ${PLUS}){box-shadow:-8px 0 10px 2px var(--colors-surface0,#181b1a)}
 .pt-edge{position:absolute;top:50%;transform:translateY(-50%);z-index:5;display:none;align-items:center;gap:3px;height:28px;padding:0 8px;border-radius:6px;border:1px solid var(--colors-border,#252b2a);background:var(--colors-surface2,#272a29);color:var(--colors-foreground,#fafafa);font-size:12.5px;font-variant-numeric:tabular-nums;cursor:pointer;user-select:none;box-shadow:0 0 0 6px var(--colors-surface0,#181b1a),0 0 16px 10px var(--colors-surface0,#181b1a)}
 .pt-edge.pt-left{left:6px;padding-left:5px}.pt-edge.pt-right{right:6px;padding-right:5px}
 .pt-edge.pt-show{display:inline-flex}
@@ -332,13 +337,19 @@ function start(state: Shared): () => void {
 
   const dragging = () => !!document.querySelector(`${TAB}[aria-pressed="true"]`);
 
+  // The pinned "+" covers the right end of the strip: tabs count as visible only left of it.
+  function plusWidth(strip: Strip) {
+    const plus = strip.scroll.querySelector(PLUS)?.parentElement;
+    return plus && plus.getClientRects().length > 0 ? plus.offsetWidth : 0;
+  }
+
   function reveal(strip: Strip, smooth: boolean) {
     const tab = tabsOf(strip).find((t) => t.selected);
     if (!tab) return;
     const target = revealTarget(
       boxOf(strip, tab),
       strip.scroll.scrollLeft,
-      strip.scroll.clientWidth,
+      strip.scroll.clientWidth - plusWidth(strip),
       strip.scroll.scrollWidth,
       EDGE,
     );
@@ -371,9 +382,13 @@ function start(state: Shared): () => void {
     }
     const { scroll } = strip;
     const overflow = scroll.scrollWidth > scroll.clientWidth + 1;
+    const plus = plusWidth(strip);
+    if (overflow) scroll.setAttribute("data-pt-overflow", "");
+    else scroll.removeAttribute("data-pt-overflow");
+    strip.right.style.right = `${6 + plus}px`;
     const byId = new Map(tabs.map((t) => [t.id, t]));
     const sides = overflow
-      ? hiddenSides(tabs.map((t) => boxOf(strip, t)), scroll.scrollLeft, scroll.clientWidth, EDGE)
+      ? hiddenSides(tabs.map((t) => boxOf(strip, t)), scroll.scrollLeft, scroll.clientWidth - plus, EDGE)
       : { left: [], right: [] };
     const left = sides.left.map((id) => byId.get(id)!);
     const right = sides.right.map((id) => byId.get(id)!);
@@ -438,6 +453,7 @@ function start(state: Shared): () => void {
       button.remove();
       for (const node of scroll.querySelectorAll(TAB)) clearTab(node);
       scroll.removeAttribute("data-paseo-tabs");
+      scroll.removeAttribute("data-pt-overflow");
     };
     return strip;
   }
