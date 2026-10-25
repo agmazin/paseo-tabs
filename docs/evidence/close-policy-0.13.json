@@ -1,0 +1,8 @@
+{
+  "bundle": "/Applications/Paseo.app/Contents/Resources/app-dist/_expo/static/js/web/index-f1a1407fb8de7ac3fefc1cc576f0e46f.js",
+  "checks": 5,
+  "rootClosePolicy": "archive-on-close",
+  "childClosePolicy": "layout-only",
+  "rootAutoOpensWithFalseLabel": true,
+  "rootUsesOpenLabel": false
+}
