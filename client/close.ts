@@ -31,7 +31,7 @@ function panes(root: any): any[] {
   return (root.group?.children ?? []).flatMap(panes);
 }
 
-export function interceptClose(store: Store): () => void {
+export function interceptClose(store: Store) {
   let context: { key: string; tabId: string } | null = null;
   const entries = () => Object.entries(store.getState().layoutByWorkspace) as [string, any][];
   const locate = (tabId: string) => {
@@ -86,38 +86,43 @@ export function interceptClose(store: Store): () => void {
     const found = fromNode(event.target);
     context = found ? { key: found.key, tabId: found.tab.tabId } : null;
   };
-  const key = (event: any) => {
-    if (event.key === "Escape") context = null;
-    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "w" || event.shiftKey || event.altKey) return;
-    if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
+  const closeCurrent = () => {
+    if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return false;
     const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
     const workspace = route ? entries().find(([key]) => key === `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`) : null;
     const pane = workspace ? panes(workspace[1].root).find(p => p.id === workspace[1].focusedPaneId) : null;
     const found = pane ? locate(pane.focusedTabId) : fromNode(document.querySelector(`${TAB}[aria-selected="true"]`));
-    if (!found || found.tab.target.kind !== "agent") return;
-    stop(event);
+    if (!found || found.tab.target.kind !== "agent") return false;
     close(found.key, [found.tab]);
+    return true;
+  };
+  const key = (event: any) => {
+    if (event.key === "Escape") context = null;
+    if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "w" || event.shiftKey || event.altKey) return;
+    if (closeCurrent()) stop(event);
   };
   for (const type of ["pointerdown", "mousedown", "click", "auxclick"]) window.addEventListener(type, click, true);
   window.addEventListener("contextmenu", menu, true);
   window.addEventListener("keydown", key, true);
-  return () => {
+  return { closeCurrent, dispose: () => {
     for (const type of ["pointerdown", "mousedown", "click", "auxclick"]) window.removeEventListener(type, click, true);
     window.removeEventListener("contextmenu", menu, true);
     window.removeEventListener("keydown", key, true);
-  };
+  } };
 }
 
-export function mountClose(): () => void {
+function startClose(): () => void {
   let disposed = false;
   let release: (() => void) | undefined;
   void discoverLayoutStore().then(store => {
     if (disposed) return;
     if (store) {
       const stopPersistence = persistHidden(store);
-      const stopEvents = interceptClose(store);
+      const events = interceptClose(store);
+      window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      release = () => { stopEvents(); stopPersistence(); document.documentElement.removeAttribute("data-paseo-tabs-close"); };
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.3.1");
+      release = () => { events.dispose(); stopPersistence(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else console.warn("[paseo-tabs] Layout store unavailable; native tab closing retained");
   }).catch(error => { if (!disposed) console.warn("[paseo-tabs] Layout store unavailable; native tab closing retained", error); });
@@ -151,4 +156,29 @@ function persistHidden(store: Store): () => void {
     previous = state.hiddenAgentIdsByWorkspace;
     save(state);
   });
+}
+
+export function mountClose(): () => void {
+  const version = "0.3.1";
+  let state = window.__paseoTabsClose;
+  if (!state || state.version !== version) {
+    state?.dispose();
+    state = { version, count: 0 };
+    window.__paseoTabsClose = state;
+    const stop = startClose();
+    state.dispose = () => {
+      state.stopKeyboard?.();
+      document.documentElement.removeAttribute("data-paseo-tabs-keyboard");
+      stop();
+    };
+  }
+  state.count++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--state.count > 0) return;
+    state.dispose();
+    if (window.__paseoTabsClose === state) delete window.__paseoTabsClose;
+  };
 }

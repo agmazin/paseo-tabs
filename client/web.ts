@@ -301,6 +301,7 @@ function shared() {
 export function mountTabs(paseo: Paseo): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   // One adapter per window even when several hosts load the plugin.
+  const stopClose = mountClose();
   const host = shared();
   if (!host.__paseoTabs) {
     const fresh: Shared = { count: 0, dispose: () => {}, sources: new Set(), notify: () => {} };
@@ -316,6 +317,7 @@ export function mountTabs(paseo: Paseo): () => void {
   return () => {
     if (released) return;
     released = true;
+    stopClose();
     stopWatch();
     state.sources.delete(source);
     state.notify();
@@ -326,7 +328,6 @@ export function mountTabs(paseo: Paseo): () => void {
 }
 
 function start(state: Shared): () => void {
-  const stopClose = mountClose();
   const style = el("style", "");
   style.textContent = css;
   document.head.append(style);
@@ -683,7 +684,6 @@ function start(state: Shared): () => void {
   schedule();
   return () => {
     disposed = true;
-    stopClose();
     state.notify = () => {};
     if (frame !== null) cancelAnimationFrame(frame);
     observer.disconnect();

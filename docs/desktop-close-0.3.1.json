@@ -1,0 +1,35 @@
+{
+  "client": "Paseo app-dist 0.13.0",
+  "daemon": "0.12.0",
+  "electron": "44.2.0",
+  "legacyRetained": true,
+  "baselineArchived": true,
+  "checks": [
+    {
+      "id": "03e7e46f-0eaa-4068-9a43-c1a15d3fca97",
+      "kind": "root",
+      "action": "cross",
+      "archived": false
+    },
+    {
+      "id": "03e7e46f-0eaa-4068-9a43-c1a15d3fca97",
+      "kind": "root",
+      "action": "Cmd+W",
+      "archived": false
+    },
+    {
+      "id": "d8198484-a39c-4f55-9000-fa99e206011c",
+      "kind": "subagent",
+      "action": "cross",
+      "archived": false
+    },
+    {
+      "id": "d8198484-a39c-4f55-9000-fa99e206011c",
+      "kind": "subagent",
+      "action": "Cmd+W",
+      "archived": false
+    }
+  ],
+  "persistedAfterReload": true,
+  "reopen": true
+}
