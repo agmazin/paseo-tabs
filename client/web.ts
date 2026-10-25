@@ -1,4 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { mountClose } from "./close";
 import { Platform } from "react-native";
 import {
   agentIdOf,
@@ -325,6 +326,7 @@ export function mountTabs(paseo: Paseo): () => void {
 }
 
 function start(state: Shared): () => void {
+  const stopClose = mountClose();
   const style = el("style", "");
   style.textContent = css;
   document.head.append(style);
@@ -681,6 +683,7 @@ function start(state: Shared): () => void {
   schedule();
   return () => {
     disposed = true;
+    stopClose();
     state.notify = () => {};
     if (frame !== null) cancelAnimationFrame(frame);
     observer.disconnect();
