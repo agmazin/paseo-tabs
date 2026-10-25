@@ -6,7 +6,21 @@ declare const fetch: any;
 type Store = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void };
 const TAB = 'button[data-testid^="workspace-tab-"][aria-selected]';
 
+function cachedStore(): Store | null {
+  try {
+    const id = Number(window.localStorage.getItem("paseo-tabs.layout-module.v1"));
+    if (!id) return null;
+    for (const value of Object.values(window.__r?.(id) ?? {}) as any[]) {
+      const state = value?.getState?.();
+      if (state?.layoutByWorkspace && ["hideAgent", "unhideAgent", "closeTab", "openTab"].every(key => typeof state[key] === "function")) return value;
+    }
+  } catch {}
+  return null;
+}
+
 export async function discoverLayoutStore(): Promise<Store | null> {
+  const cached = cachedStore();
+  if (cached) return cached;
   const metro = window.__r;
   if (typeof metro !== "function") return null;
   for (const script of document.scripts) {
@@ -18,7 +32,7 @@ export async function discoverLayoutStore(): Promise<Store | null> {
       for (const value of Object.values(exports) as any[]) {
         if (typeof value?.getState !== "function" || typeof value?.subscribe !== "function") continue;
         const state = value.getState();
-        if (state?.layoutByWorkspace && ["hideAgent", "unhideAgent", "closeTab", "openTab"].every(key => typeof state[key] === "function")) return value;
+        if (state?.layoutByWorkspace && ["hideAgent", "unhideAgent", "closeTab", "openTab"].every(key => typeof state[key] === "function")) { window.localStorage.setItem("paseo-tabs.layout-module.v1", String(id)); return value; }
       }
     }
   }
@@ -111,22 +125,69 @@ export function interceptClose(store: Store) {
   } };
 }
 
+export function connectDispatcher() {
+  const state = window.__paseoTabsClose;
+  if (!state || state.dispatcher) return;
+  const root = document.getElementById("root");
+  const key = root && Object.keys(root).find(key => key.startsWith("__reactContainer$"));
+  const container = key && root[key];
+  const pending = [container?.stateNode?.current ?? container];
+  const seen = new Set();
+  while (pending.length) {
+    const fiber = pending.pop();
+    if (!fiber || seen.has(fiber)) continue;
+    seen.add(fiber);
+    const dispatcher = fiber.memoizedProps?.value;
+    if (typeof dispatcher?.registerHandler === "function" && typeof dispatcher?.dispatch === "function") {
+      if (state.dispatcher === dispatcher) return;
+      state.stopKeyboard?.();
+      state.dispatcher = dispatcher;
+      state.stopKeyboard = dispatcher.registerHandler({
+        handlerId: "paseo-tabs-close-current", actions: ["workspace.tab.close-current"],
+        enabled: true, priority: 100_000,
+        handle: () => state.closeCurrent?.() ?? false,
+      });
+      document.documentElement.setAttribute("data-paseo-tabs-keyboard", "ready");
+      return;
+    }
+    pending.push(fiber.child, fiber.sibling);
+  }
+}
+
 function startClose(): () => void {
   let disposed = false;
   let release: (() => void) | undefined;
-  void discoverLayoutStore().then(store => {
+  const install = (store: Store | null) => {
     if (disposed) return;
     if (store) {
       const stopPersistence = persistHidden(store);
+      for (const [key, layout] of Object.entries(store.getState().layoutByWorkspace) as [string, any][]) {
+        for (const pane of panes(layout.root)) for (const tab of pane.tabs)
+          if (tab.target.kind === "agent" && window.__paseoTabsClose.pending?.has(tab.target.agentId)) {
+            store.getState().hideAgent(key, tab.target.agentId);
+            store.getState().closeTab(key, tab.tabId);
+          }
+      }
+      window.__paseoTabsClose.pending?.clear();
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.3.1");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.3.2");
       release = () => { events.dispose(); stopPersistence(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
-    else console.warn("[paseo-tabs] Layout store unavailable; native tab closing retained");
-  }).catch(error => { if (!disposed) console.warn("[paseo-tabs] Layout store unavailable; native tab closing retained", error); });
-  return () => { disposed = true; release?.(); };
+    else {
+      window.__paseoTabsClose.unavailable = true;
+      window.__paseoTabsClose.closeCurrent = () => false;
+      console.warn("[paseo-tabs] Layout store unavailable; native tab closing retained");
+    }
+    connectDispatcher();
+  };
+  const cached = cachedStore();
+  if (cached) install(cached);
+  else void discoverLayoutStore().then(install).catch(error => console.warn("[paseo-tabs] Layout discovery failed", error));
+  const timer = window.setInterval(connectDispatcher, 100);
+  connectDispatcher();
+  return () => { disposed = true; window.clearInterval(timer); release?.(); };
 }
 
 function persistHidden(store: Store): () => void {
@@ -159,16 +220,33 @@ function persistHidden(store: Store): () => void {
 }
 
 export function mountClose(): () => void {
-  const version = "0.3.1";
+  const version = "0.3.2";
   let state = window.__paseoTabsClose;
   if (!state || state.version !== version) {
     state?.dispose();
     state = { version, count: 0 };
     window.__paseoTabsClose = state;
+    state.pending = new Set<string>();
+    state.closeCurrent = () => {
+      const tab = document.querySelector(`${TAB}[aria-selected="true"]`);
+      const id = tab?.getAttribute("data-testid")?.match(/^workspace-tab-agent_(.+)$/)?.[1];
+      if (!id) return false;
+      state.pending.add(id);
+      return true;
+    };
+    const earlyClick = (event: any) => {
+      if (state.unavailable || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
+      const button = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
+      if (!button) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      state.pending.add(button.getAttribute("data-testid").slice("workspace-agent-close-".length));
+    };
+    window.addEventListener("click", earlyClick, true);
     const stop = startClose();
     state.dispose = () => {
       state.stopKeyboard?.();
       document.documentElement.removeAttribute("data-paseo-tabs-keyboard");
+      window.removeEventListener("click", earlyClick, true);
       stop();
     };
   }
@@ -178,7 +256,8 @@ export function mountClose(): () => void {
     if (released) return;
     released = true;
     if (--state.count > 0) return;
-    state.dispose();
-    if (window.__paseoTabsClose === state) delete window.__paseoTabsClose;
+    // Keep the window guard across plugin reload and host reconnection.
+    // Replacement by a newer guard disposes this instance atomically.
+    state.count = 0;
   };
 }

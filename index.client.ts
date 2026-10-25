@@ -1,9 +1,14 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
-import { KeyboardBridge } from "./client/keyboard";
+import { mountClose } from "./client/close";
+import { installIntentJournal, startRecovery } from "./client/recovery";
 import { mountTabs } from "./client/web";
 
+declare const window: any;
+declare const document: any;
+if (typeof window !== "undefined" && typeof document !== "undefined") { installIntentJournal(); mountClose(); }
+
 export default function contribute(client: PluginClientContext) {
+  const stopRecovery = startRecovery(client);
   const stopTabs = mountTabs(client.paseo);
-  const stopKeyboard = client.addSidebarHeaderItem({ id: "keyboard-bridge", title: "Вкладки", Component: KeyboardBridge });
-  return () => { stopKeyboard(); stopTabs(); };
+  return () => { stopRecovery(); stopTabs(); };
 }

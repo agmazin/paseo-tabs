@@ -1,0 +1,21 @@
+[
+  {
+    "case": "confirmed-close",
+    "archived": false,
+    "sameId": true
+  },
+  {
+    "case": "consumed-intent-does-not-revive-later-CLI-archive",
+    "archived": true
+  },
+  {
+    "case": "CLI-without-intent",
+    "archived": true,
+    "sameId": true
+  },
+  {
+    "case": "explicit-archive",
+    "archived": true,
+    "sameId": true
+  }
+]
