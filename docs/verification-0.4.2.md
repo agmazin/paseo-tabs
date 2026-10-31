@@ -21,7 +21,11 @@
 отступ компенсирован на штатный padding самой иконки. Tab показывает кольцо theme.colors.ring.
 
 Host exports заимствуются из точной сборки Paseo 0.14.0 через Metro, как существующий layout store.
-Проверяется контракт экспортов. Требование manifest сужено до `>=0.14.0 <0.14.1`.
+Перед любым Metro require проверяется точное имя content-addressed entry asset
+`index-4df2750168de94b9b8fdf3170859afa9.js`, затем контракт экспортов.
+Manifest сохраняет прежнее `>=0.12.0 <0.15.0`: оно применяется и к демону, и к app,
+поэтому не может описывать совместимость только desktop UI. Native patch отдельно
+проверяет SHA-256 исходного bundle/index перед записью.
 Это явно ограниченная совместимость с текущим клиентом, а не копия его CSS.
 Скрытый, перекрытый или невидимый диалог не может подтвердить действие: перед выбором
 проверяются hit testing контролов и visibility/opacity их предков.
@@ -71,8 +75,8 @@ JSON-результаты четырёх режимов и метрики виз
 
 - Установленный native 0.4.1: `80161ccff233ffc308473699ed096d9a228d2f215f085665571d48ba50701a8f`
 - Установленный index 0.4.1: `738f1a9a437b7dcce8b272b787e8fe2f2a6f0d81ab9b0ec996da8e3012efe484`
-- Подготовленный native 0.4.2: `9d710c8e3b9e4bc967c4896f2bc9cb956feeb201e07717a292b553c7e130043f`
-- Подготовленный index 0.4.2: `a8d4646645f2c6d5652c4ed065f4d6457bf7ed00d3ff83eeeaa5a63a29f17572`
+- Подготовленный native 0.4.2: `2fb0ec9e897d41a501b75b40d28fabfe05959f535d446d89650c8f896ba79633`
+- Подготовленный index 0.4.2: `383981f899f65852e30c81c9f2f9b4582e527594b56cccb4e8929c4b141162bf`
 
 Неизвестная пара отклоняется до записи. Патч строится только из exact original backup.
 Новый record `e34d305be181eda51066d03f7d1516b4603cc4661643e1ca3d818f2bba3e7363-0.4.2.json`
@@ -117,3 +121,35 @@ paseo plugin ls
 ```
 
 Основной UI и демон не перезапускать. Проверить фактический plugin/policy marker 0.4.1.
+
+## Исправление совместимости после технической приёмки
+
+`requirements.paseo` проверяется до запуска кода в обоих runtime:
+- Paseo 0.13.2: `packages/server/src/server/plugins/index.ts:691` (checkRequirements),
+  также при запуске в строке 258; используется `this.daemonVersion`, runtime daemon.
+- App/Android: `packages/app/src/plugins/registry.ts:76`; используется версия app,
+  проверка выполняется до создания runtime и evaluation client bundle.
+- Общая функция: `packages/protocol/src/plugin-requirements.ts:22`,
+  `assertPluginCompatibility`. Исходник этой функции в локальных checkout 0.13.2 и
+  0.14.0 побайтово одинаков (проверено cmp); тест использует этот настоящий protocol helper.
+
+Manifest возвращён к прежнему `>=0.12.0 <0.15.0`. Проверены daemon/app 0.13.2,
+а также 0.12.0 и 0.14.0; прежний ошибочный узкий диапазон воспроизведён как reject
+для обоих runtime 0.13.2. Значит обновление desktop UI не блокирует plugin catalog
+основного демона или Android 0.13.2.
+
+Точный desktop asset проверяется в hostCloseUi до любого числового Metro lookup.
+Неподдерживаемый web build отменяет выбор; числовые модули другого клиента не загружаются.
+Native patch по-прежнему допускает только точные SHA исходного bundle/index.
+Android/iOS без DOM не обращаются к этому guard или UI-модулям.
+
+Typecheck и все 19 тестов без skip прошли после исправления. Дополнительные тесты:
+настоящий requirements helper для обоих runtime, unknown build без единого Metro lookup,
+exact entry с cache key и validation экспортов. Проверка native check на основной
+установке выполнена только для чтения; подготовленные SHA выше обновлены.
+Предыдущая живая визуальная матрица относится к неизменённому UI; эта правка добавляет
+проверку asset перед его использованием, не меняя отображение.
+
+Fixture home остановлен: status localDaemon=stopped, pid=null, connectedDaemon=not_probed.
+Listener 6812 отсутствует, процессов choice-host.cjs и тестового daemon home нет.
+В этой корректировке fixture runtime не запускался; основной демон и prod не менялись.

@@ -212,6 +212,9 @@ function allPanes(root: any): any[] {
 // Metro exports of the exact Paseo 0.14.0 client supported by the native patch.
 // The host owns the modal, header, close icon, compact sheet, buttons and theme.
 function hostCloseUi() {
+  const bundle = "/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js";
+  if (!Array.from(document.scripts ?? []).some((script: any) => script.src?.split(/[?#]/)[0].endsWith(bundle)))
+    throw new Error("Unsupported Paseo desktop UI build; action cancelled");
   const load = window.__r;
   if (typeof load !== "function") throw new Error("Paseo UI modules unavailable");
   const React = load(35);

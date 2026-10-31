@@ -1,24 +1,27 @@
-✔ close selection preserves pane order and excludes the kept tab (2.167917ms)
-✔ module discovery follows source shape rather than a fixed module number (0.291208ms)
-✔ fallback closes archived root/child locally and cancels stale or unknown status (146.872167ms)
-✔ hidden sides count tabs under the edge counters (0.784125ms)
-✔ reveal brings the active tab clear of the counters and stays in range (0.102666ms)
-✔ flag picks the most important hidden status (0.066875ms)
-✔ running descendants count up the whole parent chain (0.101ms)
-✔ a resting chat gives way to its subagents, other statuses stay native (0.244042ms)
-✔ vertical wheel scrolls horizontally, trackpad sideways stays native (0.13075ms)
-✔ search ignores case and ё (0.347709ms)
-✔ russian plural and native jump hints (0.171792ms)
-✔ native deployment rejects an unknown client before writing (2.777209ms)
-✔ native deployment is exact, idempotent, and reversible (2957.621709ms)
-✔ native callback never archives idle/running roots or children before an explicit choice (93.315291ms)
-✔ native callback cancels a stale choice and never uses another host's archived state (83.214542ms)
-✔ Android/iOS contribute is safe with window=global and no DOM or addEventListener (179.521708ms)
-ℹ tests 16
+✔ close selection preserves pane order and excludes the kept tab (0.907542ms)
+✔ module discovery follows source shape rather than a fixed module number (0.156291ms)
+✔ fallback closes archived root/child locally and cancels stale or unknown status (82.578ms)
+✔ manifest admits daemon and Android app 0.13.2 independently of desktop build (4.273ms)
+✔ unsupported desktop build is rejected before any numeric Metro lookup (1.86975ms)
+✔ exact desktop entry with cache key admits host exports and validates their contract (1.274709ms)
+✔ hidden sides count tabs under the edge counters (0.768042ms)
+✔ reveal brings the active tab clear of the counters and stays in range (0.093708ms)
+✔ flag picks the most important hidden status (0.061125ms)
+✔ running descendants count up the whole parent chain (0.096584ms)
+✔ a resting chat gives way to its subagents, other statuses stay native (0.066667ms)
+✔ vertical wheel scrolls horizontally, trackpad sideways stays native (0.050625ms)
+✔ search ignores case and ё (0.14075ms)
+✔ russian plural and native jump hints (0.068917ms)
+✔ native deployment rejects an unknown client before writing (1.832583ms)
+✔ native deployment is exact, idempotent, and reversible (2903.5505ms)
+✔ native callback never archives idle/running roots or children before an explicit choice (90.888917ms)
+✔ native callback cancels a stale choice and never uses another host's archived state (82.679208ms)
+✔ Android/iOS contribute is safe with window=global and no DOM or addEventListener (158.272291ms)
+ℹ tests 19
 ℹ suites 0
-ℹ pass 16
+ℹ pass 19
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 3425.768458
+ℹ duration_ms 3431.335792
