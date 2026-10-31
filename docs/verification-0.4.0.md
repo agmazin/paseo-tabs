@@ -1,0 +1,139 @@
+# Проверка обязательного выбора 0.4.0
+
+## Причина
+
+Штатный `resolveCloseAgentTabPolicy` в Paseo 0.14.0 возвращает для головного чата
+`archive-on-close`, для подагента `layout-only`. Для idle root подтверждения архива
+не было. Плагин 0.3.2 перехватывал закрытие только после асинхронного поиска стора,
+а при ошибке поиска явно оставлял штатный обработчик. Поэтому результат зависел
+от готовности адаптера. Дополнительная серверная страховка могла восстановить
+архив постфактум и тоже не обеспечивала обязательный выбор.
+
+Живая репродукция: исходный app-dist 0.14.0, плагин 0.3.2, намеренно недоступный
+поиск layout store. Крестик idle fixture root архивировал чат без выбора.
+Протокол: `docs/evidence/close-choice-0.4.0/baseline.json`.
+
+## Исправление
+
+`client/close-policy.web.ts` - общий runtime выбора и закрытия. Диалог всегда
+содержит "Закрыть вкладку", "В архив", "Отмена". Фокус по умолчанию на отмене;
+Escape отменяет, Tab остаётся в диалоге. Запоминания выбора нет.
+
+Каждый запрос связан с workspaceKey, tabId и agentId. Диалог проверяет существование
+вкладки и фокус; переход в другую вкладку/пространство отменяет запрос. Одновременно
+существует только один диалог; повторные вызовы завершаются отменой, очереди нет.
+Ошибка построения, невидимый диалог, удаление диалога или отсутствие runtime не
+передают управление архивации. Удаление/обновление плагина отменяет открытый запрос.
+
+Закрытие вызывает только операции локальной раскладки. Список скрытых агентов
+сохраняется отдельно по ключу хоста и пространства; после reload он восстанавливается
+до согласования вкладок. Обычное открытие чата снимает скрытие. Архивирование находится
+в отдельной ветке и выполняется только после результата `archive`.
+
+`client/close.ts` устанавливает capture guard синхронно до поиска стора. Неизвестный
+store больше не включает штатную архивацию и не создаёт отложенных действий.
+Плагин использует API того хоста, от которого агент получен существующей подпиской,
+и проверяет workspaceId. Новых подключений нет.
+
+Сервер восстановления, журнал close-intent и приватный same-ID import удалены.
+Автоматического возврата явного архива больше нет. Android/iOS `contribute` безопасно
+завершается без DOM; нативный мобильный core этим выпуском не патчится.
+
+## Штатный клиент
+
+Публичного API до загрузки плагина нет. `scripts/native-close-patch.mts` выполняет
+проверяемый патч центрального callback штатного клиента и загрузки layout store.
+Штатные desktop/pane/tab-menu/keyboard обработчики сходятся в `bs`/`ds`; агентский
+sheet-путь также перенаправлен в тот же callback. Внесены ровно три замены в bundle.
+Общий runtime добавлен до main, до отображения интерфейса. Дополнительно меняется
+ключ кеша script в index.html, чтобы reload не взял прежний immutable bundle.
+
+Совместимый Desktop/web bundle 0.14.0:
+- файл: `_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js`;
+- исходный SHA-256: `e34d305be181eda51066d03f7d1516b4603cc4661643e1ca3d818f2bba3e7363`;
+- исходный index SHA-256: `e43e6f3cb52d9affede68829baf465cc25d36692e720aa0ee57858637780316f`.
+
+Неизвестный hash, неоднозначный якорь, повреждённый backup или изменённая установленная
+версия отклоняются до записи. Backup и deployment record хранятся вне репозитория.
+Запись через временные файлы и rename; при ошибке восстанавливается предыдущее содержимое.
+Повторное применение проверяет установленную пару bundle/index и ничего не меняет.
+Rollback возвращает оба исходных файла. Демон и приложение скрипт не перезапускает.
+
+## Среда и доказательства
+
+При начале задачи: Desktop/CLI 0.14.0 на диске; основной desktop-managed daemon 0.13.2,
+127.0.0.1:6767; установлен paseo-tabs 0.3.2. Версия файла на диске не доказывает версию
+уже открытого renderer. Основной демон и личные чаты исполнителем не менялись.
+
+Живые тесты: скрытый отдельный Electron 44.2 с оригинальным preload и копией app-dist,
+изолированный daemon 0.14.0 на 127.0.0.1:6812. Созданы idle fixtures без отправки промптов;
+подагент создан через callerAgentId. Все реальные архивные действия только над fixtures.
+
+| Сценарий | Штатный патч без плагина | Исходный клиент + плагин | Патч + плагин |
+| --- | --- | --- | --- |
+| Каждый крестик открывает три выбора | Проверено | Проверено | Проверено |
+| Отмена, Escape, повторный клик | Проверено | Проверено | Проверено |
+| Root и child, выбранная/невыбранная вкладка | Проверено | Проверено | Проверено |
+| Закрыть без архива, ход не останавливается | Проверено на idle fixtures | Проверено на idle fixtures | Проверено на idle fixtures |
+| Скрытие после UI reload, повторное открытие | Проверено | Проверено | Проверено |
+| 12 быстрых кликов, отмена без очереди | Проверено | Проверено | Проверено |
+| Смена вкладки при открытом диалоге | Проверено | Проверено | Проверено |
+| Ошибка создания диалога | Проверено | Проверено | Проверено |
+| Cmd+W | Проверено | Проверено | Проверено |
+| Явный архив root/child только после выбора | Проверено | Проверено | Проверено |
+| Reload плагина с открытым диалогом | Не применяется | Проверено | Проверено |
+| Отсутствующий runtime | Блокирует действие | Не применяется | Не применяется |
+| Задержка/ошибка discovery до готовности | Native не зависит от discovery | Проверено отдельно | Native не зависит от discovery |
+
+JSON-протоколы: `docs/evidence/close-choice-0.4.0/{native,plugin,combined}/result.json`,
+`edges.json`, `baseline.json`. Снимки не коммитятся: они сохраняются рядом с JSON локально.
+Проверки native callback дополнительно покрывают 20 комбинаций idle/running,
+root/child и cancel/close/archive/undefined/exception без запуска платных ходов.
+Фактический running ход не запускался и не прерывался тестами.
+
+14 тестов проходят с заданным CLOSE_ORIGINAL_BUNDLE, TypeScript проходит.
+В CI без установленного приложения два теста точного native bundle пропускаются;
+проверки отказа неизвестной версии и Android/iOS инициализации выполняются всегда.
+
+## Повтор проверки
+
+Рабочий каталог:
+`/Users/agmazin/Library/Developer/paseo-tabs/explicit-close-choice`.
+Тестовая база:
+`/Users/agmazin/Library/Developer/paseo-tabs/explicit-close-fixtures`.
+
+```sh
+npm run typecheck
+CLOSE_ORIGINAL_BUNDLE=/Applications/Paseo.app/Contents/Resources/app-dist/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js npm test
+CLOSE_FIXTURE_BASE=/Users/agmazin/Library/Developer/paseo-tabs/explicit-close-fixtures node tests/browser/setup-close-fixtures.mjs
+CLOSE_FIXTURE_BASE=/Users/agmazin/Library/Developer/paseo-tabs/explicit-close-fixtures CLOSE_MODE=native CLOSE_PROFILE=native-review node tests/browser/close-choice.mjs
+```
+
+Для plugin: original app-dist, включён только новый paseo-tabs, CLOSE_MODE=plugin.
+Для combined: патч + новый плагин, CLOSE_MODE=combined. Перед каждым архивным прогоном
+создать свежие fixtures. `close-choice-edges.mjs` требует original app-dist + новый
+плагин; `close-choice-baseline.mjs` требует original app-dist + старый 0.3.2.
+
+## Установка техлидом
+
+1. Интегрировать PR, проверить CI, выпустить tag/release v0.4.0.
+2. В release checkout переключиться на v0.4.0, `paseo plugin reload paseo-tabs`.
+   Это сначала отключает прежний сервер восстановления и защищает открытый renderer
+   новым capture guard. Проверить настоящий runtime 0.4.0, а не только каталог плагинов.
+3. Выполнить preflight и apply ниже. Unknown version не обходить.
+4. В текущем окне проверить runtime атрибуты/версии. `window.__paseoTabsClose.version`
+   должен быть 0.4.0. `window.__paseoNativeTabCloseVersion` появится после загрузки
+   нового bundle. До этого уже загруженное окно защищает новый fallback плагина.
+5. UI reload выполнять только сохранив пользовательские черновики. Проверить native
+   marker 0.4.0 и новый ключ script после reload; сам факт изменения файла этого не доказывает.
+6. Живые архивные проверки в основном хосте только на fixtures. Личные чаты не архивировать.
+
+```sh
+node --experimental-strip-types scripts/native-close-patch.mts check /Applications/Paseo.app/Contents/Resources/app-dist /Users/agmazin/Library/Developer/paseo-tabs/native-close-backups
+node --experimental-strip-types scripts/native-close-patch.mts apply /Applications/Paseo.app/Contents/Resources/app-dist /Users/agmazin/Library/Developer/paseo-tabs/native-close-backups
+```
+
+Откат native: тот же скрипт с `rollback` и тем же каталогом backup. Откат плагина
+на 0.3.2 возвращает прежнее поведение и потому не выполняется как штатное действие.
+Сначала проверить защиту реально открытого renderer. Обновление самого Paseo требует
+нового preflight; патч не меняет неизвестный bundle автоматически.

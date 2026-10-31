@@ -1,4 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { mountClose, observeCloseAgent, releaseCloseAgents } from "./close";
 import { Platform } from "react-native";
 import {
   agentIdOf,
@@ -237,7 +238,7 @@ function watchAgents(paseo: Paseo, source: Map<string, AgentLink>, changed: () =
       let cursor: string | undefined;
       do {
         const r = await paseo.agents.list({ page: { limit: 200, cursor } });
-        for (const { agent } of r.entries) all.set(agent.id, keep(agent));
+        for (const { agent } of r.entries) { all.set(agent.id, keep(agent)); observeCloseAgent(paseo, agent); }
         cursor = r.pageInfo.nextCursor ?? undefined;
       } while (cursor);
       if (!alive) return;
@@ -250,8 +251,8 @@ function watchAgents(paseo: Paseo, source: Map<string, AgentLink>, changed: () =
     }
   };
   const off = paseo.agents.subscribe((update) => {
-    if (update.kind === "upsert") source.set(update.agent.id, keep(update.agent));
-    else source.delete(update.agentId);
+    if (update.kind === "upsert") { source.set(update.agent.id, keep(update.agent)); observeCloseAgent(paseo, update.agent); }
+    else { source.delete(update.agentId); observeCloseAgent(paseo, { id: update.agentId }, true); }
     changed();
   });
   // One owned subscription makes the daemon push agent updates to this client.
@@ -266,6 +267,7 @@ function watchAgents(paseo: Paseo, source: Map<string, AgentLink>, changed: () =
   const timer = setInterval(() => void load(), 60_000);
   return () => {
     alive = false;
+    releaseCloseAgents(paseo);
     off();
     release?.();
     clearInterval(timer);
@@ -300,6 +302,7 @@ function shared() {
 export function mountTabs(paseo: Paseo): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   // One adapter per window even when several hosts load the plugin.
+  const stopClose = mountClose();
   const host = shared();
   if (!host.__paseoTabs) {
     const fresh: Shared = { count: 0, dispose: () => {}, sources: new Set(), notify: () => {} };
@@ -315,6 +318,7 @@ export function mountTabs(paseo: Paseo): () => void {
   return () => {
     if (released) return;
     released = true;
+    stopClose();
     stopWatch();
     state.sources.delete(source);
     state.notify();

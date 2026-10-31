@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-10-25T17:45:03.838Z",
+  "host": "127.0.0.1:6767",
+  "daemonPid": 1887,
+  "plugins": [
+    {
+      "id": "paseo-tabs",
+      "version": "0.3.1",
+      "status": "running",
+      "path": "/Users/agmazin/Library/Developer/paseo-releases/paseo-tabs",
+      "clientBundleBytes": 43082,
+      "clientBundleSha256": "bdb089dac652574c726d7bf53efd0b45f8d186981493c2a95bb8dfffc0ad4ceb",
+      "newBehaviorInLiveCatalog": true
+    },
+    {
+      "id": "paseo-dialogs",
+      "version": "0.9.1",
+      "status": "running",
+      "path": "/Users/agmazin/Library/Developer/paseo-releases/paseo-dialogs",
+      "clientBundleBytes": 114716,
+      "clientBundleSha256": "6fdd4e5bcefde796e0ce67154380fa445a1d7fc442fb03b57d47e6921ee37804",
+      "newBehaviorInLiveCatalog": true
+    }
+  ]
+}

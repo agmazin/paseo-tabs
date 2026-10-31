@@ -1,0 +1,9 @@
+{
+  "client": "0.14.0 original",
+  "daemon": "0.14.0",
+  "plugin": "0.3.2",
+  "fixture": true,
+  "discovery": "unavailable",
+  "mandatoryChoice": false,
+  "archivedByCrossWithoutExplicitChoice": true
+}
