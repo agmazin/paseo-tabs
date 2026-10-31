@@ -17,6 +17,8 @@ isCurrent защищает timer и finish, статус повторно про
 Ни один путь закрытия не вызывает resume/unarchive.
 Заимствующий API resolver обновляется при каждой загрузке плагина: сохраняемый guard
 после reload использует lifetime новой установки, не освобождённый API старой.
+Native marker 0.4.0 включает fallback нового плагина, поэтому новые правила закрытия
+действуют сразу после plugin reload без перезагрузки UI. Native 0.4.1 использует новый callback.
 
 ## Проверки
 
@@ -25,15 +27,15 @@ TypeScript и 16 тестов без пропусков прошли локал�
 отказом при изменённом index и неизвестном bundle. Проверяется исходный bundle
 по точному SHA, callback покрывает idle/running root/child без платных ходов.
 
-Живая матрица `tests/browser/close-choice.mjs` выполнена в трёх режимах:
-native, plugin без native, combined. Везде проверены подписи, цвета, доступное имя,
+Живая матрица `tests/browser/close-choice.mjs` выполнена в четырёх режимах:
+native, plugin без native, combined, hot-upgrade (native 0.4.0 + plugin 0.4.1). Везде проверены подписи, цвета, доступное имя,
 начальный/видимый фокус, циклический Tab, крестик/Escape, close без архива,
 сохранение скрытия после UI reload, повторное открытие, невыбранный child/root,
 быстрые клики, смена вкладки, ошибка диалога, Cmd+W и явная архивация fixtures.
 Живой прогон дополнен archived root/child: внешний archive при открытом диалоге
 отменяет его, затем та же архивная вкладка открывается локально и закрывается крестиком
 без диалога. На UI websocket проверяется отсутствие archive/resume/unarchive запросов,
-состояние archivedAt на демоне сохраняется. Это выполнено отдельно в native/plugin/combined.
+состояние archivedAt на демоне сохраняется. Это выполнено отдельно в native/plugin/combined/hot-upgrade.
 Проверен plugin reload с открытым диалогом в plugin/combined и отсутствие runtime
 в native. Снимки wide/compact визуально проверены, переполнения нет.
 

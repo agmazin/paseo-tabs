@@ -1,5 +1,10 @@
 {
   "mode": "native",
+  "observedUiMutations": [
+    "archive_agent_request",
+    "archive_agent_request",
+    "archive_agent_request"
+  ],
   "plugin": null,
   "client": "0.14.0",
   "daemon": "0.14.0",

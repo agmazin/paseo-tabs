@@ -31,12 +31,17 @@ try {
   const page = await electron.firstWindow();
   const mutationFrames = [];
   page.on("websocket", socket => socket.on("framesent", frame => {
-    try { const message = JSON.parse(String(frame.payload)); if (/archive|resume/i.test(message.type || "")) mutationFrames.push(message.type); } catch {}
+    try { const envelope = JSON.parse(String(frame.payload)); const message = envelope.message || envelope; if (/archive|resume/i.test(message.type || "")) mutationFrames.push(message.type); } catch {}
   }));
   page.on("pageerror", error => console.log("PAGE", error.message));
   page.on("console", message => { if (["error", "warning"].includes(message.type())) console.log(message.type().toUpperCase(), message.text().slice(0, 300)); });
   await page.waitForFunction(() => window.__paseoTabClosePolicy?.store, null, { timeout: 30000 });
   await page.waitForTimeout(2000);
+  if (mode === "hot-upgrade") {
+    assert.equal(await page.evaluate(() => window.__paseoNativeTabCloseVersion), "0.4.0");
+    assert.equal(await page.evaluate(() => window.__paseoTabClosePolicy.version), "0.4.1");
+    checks.push("old native 0.4.0 bootstrap uses new 0.4.1 plugin fallback without UI reload");
+  }
   console.log("URL", page.url());
   await page.screenshot({ path: `${out}/initial.png` });
   const open = async id => {
@@ -202,7 +207,8 @@ try {
     assert.equal(await archived(target), true);
     checks.push(`explicit archive only after choice: ${target === fixture.ids[2] ? "child" : "root"}`);
   }
-  writeFileSync(`${out}/result.json`, JSON.stringify({ mode, plugin: await page.evaluate(() => window.__paseoTabsClose?.version ?? null), client: "0.14.0", daemon: (await client.getDaemonStatus()).version,
+  assert.ok(mutationFrames.includes("archive_agent_request"), "UI websocket observer must capture explicit fixture archives");
+  writeFileSync(`${out}/result.json`, JSON.stringify({ mode, observedUiMutations: mutationFrames, plugin: await page.evaluate(() => window.__paseoTabsClose?.version ?? null), client: "0.14.0", daemon: (await client.getDaemonStatus()).version,
     nativePolicy: await page.evaluate(() => window.__paseoNativeTabCloseVersion), checks }, null, 2) + "\n");
   console.log(JSON.stringify(checks));
 } finally { await electron?.close(); await client.close(); }

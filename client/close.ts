@@ -6,6 +6,7 @@ declare const window: any;
 declare const document: any;
 declare const fetch: any;
 type Store = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void };
+const hasCurrentNativePolicy = () => !!window.__paseoNativeTabCloseVersion && window.__paseoNativeTabCloseVersion !== "0.4.0";
 const TAB = 'button[data-testid^="workspace-tab-"][aria-selected]';
 
 export function observeCloseAgent(api: any, agent: { id: string; workspaceId?: string }, removed = false) {
@@ -130,7 +131,7 @@ export function interceptClose(store: Store) {
     }
   };
   const click = (event: any) => {
-    if (window.__paseoNativeTabCloseVersion) return;
+    if (hasCurrentNativePolicy()) return;
     const cross = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
     if (cross) {
       stop(event);
@@ -171,7 +172,7 @@ export function interceptClose(store: Store) {
     context = found ? { key: found.key, tabId: found.tab.tabId } : null;
   };
   const closeCurrent = () => {
-    if (window.__paseoNativeTabCloseVersion) return false;
+    if (hasCurrentNativePolicy()) return false;
     if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return true;
     const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
     const workspace = route ? entries().find(([key]) => key === `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`) : null;
@@ -263,11 +264,11 @@ export function mountClose(api?: any): () => void {
     state = { version, count: 0, apis: new Set(), agents: new Map() };
     window.__paseoTabsClose = state;
     state.closeCurrent = () => {
-      if (window.__paseoNativeTabCloseVersion) return false;
+      if (hasCurrentNativePolicy()) return false;
       return true;
     };
     const earlyClick = (event: any) => {
-      if (window.__paseoNativeTabCloseVersion || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
+      if (hasCurrentNativePolicy() || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
       const button = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
       if (!button) return;
       event.preventDefault(); event.stopImmediatePropagation();
