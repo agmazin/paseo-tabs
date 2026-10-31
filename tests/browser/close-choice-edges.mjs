@@ -20,7 +20,7 @@ try {
   electron = await _electron.launch({ executablePath: process.env.ELECTRON_PATH || "/Users/agmazin/Library/Developer/paseo-tabs/desktop-test/runtime44/Electron.app/Contents/MacOS/Electron",
     args: [resolve("tests/browser/choice-host.cjs")], env: { ...process.env, CLOSE_FIXTURE_BASE: base, CLOSE_PROFILE: "plugin-edges" } });
   const page = await electron.firstWindow();
-  await page.waitForFunction(() => window.__paseoTabsClose?.version === "0.4.1");
+  await page.waitForFunction(() => window.__paseoTabsClose?.version === "0.4.2");
   assert.equal(await page.evaluate(() => !!window.__paseoNativeTabCloseVersion), false, "Edges must use the original unpatched bundle");
   await page.addInitScript(() => {
       const mode = new URL(location.href).searchParams.get("closeFixtureMode");
@@ -57,8 +57,8 @@ try {
     checks.push(`${mode} discovery: synchronous guard, unknown status blocks without prompt, no deferred close or archive`);
     await page.removeAllListeners("console");
   }
-  const out = resolve("docs/evidence/close-choice-0.4.1");
+  const out = resolve("docs/evidence/close-choice-0.4.2");
   mkdirSync(out, { recursive: true });
-  writeFileSync(`${out}/edges.json`, JSON.stringify({ client: "0.14.0 original", plugin: "0.4.1", daemon: "0.14.0", checks }, null, 2) + "\n");
+  writeFileSync(`${out}/edges.json`, JSON.stringify({ client: "0.14.0 original", plugin: "0.4.2", daemon: "0.14.0", checks }, null, 2) + "\n");
   console.log(JSON.stringify(checks));
 } finally { await electron?.close(); await client.close(); }

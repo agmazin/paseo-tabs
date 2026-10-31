@@ -1,0 +1,37 @@
+{
+  "mode": "hot-upgrade",
+  "observedUiMutations": [
+    "archive_agent_request",
+    "archive_agent_request",
+    "archive_agent_request"
+  ],
+  "plugin": "0.4.2",
+  "client": "0.14.0",
+  "daemon": "0.14.0",
+  "nativePolicy": "0.4.1",
+  "checks": [
+    "loaded native 0.4.1 receives plugin 0.4.2 after enable without UI reload",
+    "new labels/colors, accessible cross, initial focus, visible focus, Tab wrap, wide/compact",
+    "cancel preserves tab and archive state",
+    "Escape preserves tab and archive state",
+    "close hides root without archive",
+    "hidden root persists across UI reload",
+    "reopen always prompts again",
+    "close-only of an inactive child preserves the child and selected root",
+    "inactive root prompts and cancels",
+    "inactive root prompts and cancels",
+    "inactive child prompts and cancels",
+    "12 rapid clicks share one visible dialog; no delayed action after Escape",
+    "programmatic tab switch cancels pending decision",
+    "dialog construction error leaves tab and archive unchanged",
+    "Cmd+W uses the same mandatory dialog",
+    "plugin reload cancels an open decision; next click prompts again without delayed archive",
+    "external archive cancels an open root dialog without UI mutation RPC",
+    "archived root closes locally without dialog, archive/resume/unarchive RPC",
+    "external archive cancels an open child dialog without UI mutation RPC",
+    "archived child closes locally without dialog, archive/resume/unarchive RPC",
+    "explicit archive only after choice: child",
+    "explicit archive only after choice: root",
+    "explicit archive only after choice: root"
+  ]
+}
