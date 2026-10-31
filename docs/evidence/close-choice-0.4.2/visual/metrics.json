@@ -1,0 +1,206 @@
+[
+  {
+    "theme": "light",
+    "layout": "wide",
+    "metrics": [
+      {
+        "name": "cancel",
+        "box": {
+          "x": 931,
+          "y": 347.25,
+          "width": 32,
+          "height": 32
+        },
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "8px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": true
+      },
+      {
+        "name": "close",
+        "box": {
+          "x": 485,
+          "y": 512.75,
+          "width": 231,
+          "height": 32
+        },
+        "background": "rgb(32, 116, 74)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      },
+      {
+        "name": "archive",
+        "box": {
+          "x": 724,
+          "y": 512.75,
+          "width": 231,
+          "height": 32
+        },
+        "background": "rgb(249, 115, 22)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      }
+    ]
+  },
+  {
+    "theme": "light",
+    "layout": "compact",
+    "metrics": [
+      {
+        "name": "cancel",
+        "box": {
+          "x": 342,
+          "y": 335.3999938964844,
+          "width": 32,
+          "height": 32
+        },
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "8px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": true
+      },
+      {
+        "name": "close",
+        "box": {
+          "x": 24,
+          "y": 522.9000244140625,
+          "width": 167,
+          "height": 32
+        },
+        "background": "rgb(32, 116, 74)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      },
+      {
+        "name": "archive",
+        "box": {
+          "x": 199,
+          "y": 522.9000244140625,
+          "width": 167,
+          "height": 32
+        },
+        "background": "rgb(249, 115, 22)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      }
+    ]
+  },
+  {
+    "theme": "dark",
+    "layout": "wide",
+    "metrics": [
+      {
+        "name": "cancel",
+        "box": {
+          "x": 931,
+          "y": 347.25,
+          "width": 32,
+          "height": 32
+        },
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "8px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": true
+      },
+      {
+        "name": "close",
+        "box": {
+          "x": 485,
+          "y": 512.75,
+          "width": 231,
+          "height": 32
+        },
+        "background": "rgb(32, 116, 74)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      },
+      {
+        "name": "archive",
+        "box": {
+          "x": 724,
+          "y": 512.75,
+          "width": 231,
+          "height": 32
+        },
+        "background": "rgb(249, 115, 22)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      }
+    ]
+  },
+  {
+    "theme": "dark",
+    "layout": "compact",
+    "metrics": [
+      {
+        "name": "cancel",
+        "box": {
+          "x": 342,
+          "y": 335.3999938964844,
+          "width": 32,
+          "height": 32
+        },
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "8px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": true
+      },
+      {
+        "name": "close",
+        "box": {
+          "x": 24,
+          "y": 522.9000244140625,
+          "width": 167,
+          "height": 32
+        },
+        "background": "rgb(32, 116, 74)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      },
+      {
+        "name": "archive",
+        "box": {
+          "x": 199,
+          "y": 522.9000244140625,
+          "width": 167,
+          "height": 32
+        },
+        "background": "rgb(249, 115, 22)",
+        "color": "rgb(0, 0, 0)",
+        "radius": "12px",
+        "outline": "none",
+        "visibleAtCenter": true,
+        "svg": false
+      }
+    ]
+  }
+]

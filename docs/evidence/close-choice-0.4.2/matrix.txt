@@ -1,0 +1,8 @@
+Created three idle fixtures, including an actual subagent; no prompts sent
+native passed
+Created three idle fixtures, including an actual subagent; no prompts sent
+plugin passed
+Created three idle fixtures, including an actual subagent; no prompts sent
+combined passed
+Created three idle fixtures, including an actual subagent; no prompts sent
+hot-upgrade passed

@@ -15,7 +15,7 @@ const client = new DaemonClient({ url: `ws://${pid.listen}/ws`, clientId: "close
 const checks = [];
 let electron;
 const mode = process.env.CLOSE_MODE || "native";
-const out = resolve(`docs/evidence/close-choice-0.4.1/${mode}`);
+const out = resolve(`docs/evidence/close-choice-0.4.2/${mode}`);
 mkdirSync(out, { recursive: true });
 try {
   await client.connect();
@@ -38,9 +38,12 @@ try {
   await page.waitForFunction(() => window.__paseoTabClosePolicy?.store, null, { timeout: 30000 });
   await page.waitForTimeout(2000);
   if (mode === "hot-upgrade") {
-    assert.equal(await page.evaluate(() => window.__paseoNativeTabCloseVersion), "0.4.0");
     assert.equal(await page.evaluate(() => window.__paseoTabClosePolicy.version), "0.4.1");
-    checks.push("old native 0.4.0 bootstrap uses new 0.4.1 plugin fallback without UI reload");
+    execFileSync("paseo", ["plugin", "enable", "paseo-tabs", "--host", pid.listen], { stdio: "pipe" });
+    await page.waitForFunction(() => window.__paseoTabClosePolicy.version === "0.4.2" && window.__paseoTabsClose?.version === "0.4.2");
+    assert.equal(await page.evaluate(() => window.__paseoNativeTabCloseVersion), "0.4.1");
+    assert.equal(await page.evaluate(() => window.__paseoTabClosePolicy.version), "0.4.2");
+    checks.push("loaded native 0.4.1 receives plugin 0.4.2 after enable without UI reload");
   }
   console.log("URL", page.url());
   await page.screenshot({ path: `${out}/initial.png` });
@@ -71,19 +74,29 @@ try {
   assert.equal(await page.getByTestId("paseo-tab-close-close").textContent(), "Закрыть");
   assert.equal(await page.getByTestId("paseo-tab-close-archive").textContent(), "Архивировать");
   assert.equal(await page.getByTestId("paseo-tab-close-cancel").getAttribute("aria-label"), "Отменить закрытие");
-  assert.equal(await page.getByTestId("paseo-tab-close-close").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(22, 101, 52)");
-  assert.equal(await page.getByTestId("paseo-tab-close-archive").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(154, 52, 18)");
+  assert.equal(await page.getByTestId("paseo-tab-close-close").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(32, 116, 74)");
+  assert.equal(await page.getByTestId("paseo-tab-close-archive").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(249, 115, 22)");
+  assert.equal(await page.getByTestId("paseo-tab-close-cancel").evaluate(n=>getComputedStyle(n).outlineStyle), "none");
+  await page.screenshot({ path: `${out}/mandatory-choice-wide.png` });
   await page.keyboard.press("Shift+Tab");
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-archive");
   await page.keyboard.press("Tab");
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-cancel");
-  assert.equal(await page.getByTestId("paseo-tab-close-cancel").evaluate(node => getComputedStyle(node).outlineStyle), "solid");
-  await page.screenshot({ path: `${out}/mandatory-choice-wide.png` });
+  assert.equal(await page.getByTestId("paseo-tab-close-cancel").evaluate(node => getComputedStyle(node).outlineStyle), "solid", JSON.stringify(await page.evaluate(()=>({active:document.activeElement.outerHTML,styles:document.querySelector('[data-testid="paseo-tab-close-root"] style')?.textContent,theme:window.__r(160).UnistylesRuntime.getTheme().colors.ring}))));
+  await page.screenshot({ path: `${out}/keyboard-focus-wide.png` });
+  await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(500);
+  await page.evaluate(({workspaceId,id,serverId})=>{void window.__paseoTabClosePolicy.choose({workspaceKey:`${serverId}:${workspaceId}`,tabId:`agent_${id}`,agentId:id,title:"Root A"});},{workspaceId:fixture.workspaceId,id,serverId:pid.serverId});
+  await page.getByTestId("paseo-tab-close-close").waitFor();
+  await page.waitForTimeout(800);
   await page.screenshot({ path: `${out}/mandatory-choice-compact.png` });
   const box = await page.getByTestId("paseo-tab-close-close").boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 390);
+  await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(500);
+  await cross(id);
   checks.push("new labels/colors, accessible cross, initial focus, visible focus, Tab wrap, wide/compact");
   await page.getByTestId("paseo-tab-close-cancel").click();
   assert.equal(await page.getByTestId(`workspace-tab-agent_${id}`).count(), 1);
@@ -144,7 +157,7 @@ try {
   await page.evaluate(() => {
     const original = document.body.appendChild;
     document.body.appendChild = function (node) {
-      if (node.dataset?.testid === "paseo-tab-close-dialog") { document.body.appendChild = original; throw new Error("fixture dialog failure"); }
+      if (node.dataset?.testid === "paseo-tab-close-root") { document.body.appendChild = original; throw new Error("fixture dialog failure"); }
       return original.call(this, node);
     };
   });
@@ -180,7 +193,7 @@ try {
   for (const child of [false, true]) {
     const stale = await client.createAgent({ provider: "codex", cwd: base, workspaceId: fixture.workspaceId,
       title: child ? "Archive race child" : "Archive race root", ...(child ? { callerAgentId: id } : {}),
-      labels: { "test.fixture": "explicit-close-0.4.1" } });
+      labels: { "test.fixture": "explicit-close-0.4.2" } });
     await open(stale.id);
     await cross(stale.id);
     const before = mutationFrames.length;
