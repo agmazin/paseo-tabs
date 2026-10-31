@@ -5,7 +5,7 @@ declare const document: any;
 
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
-export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string };
+export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
 const VERSION = "0.4.1";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
@@ -32,7 +32,7 @@ export function installClosePolicy() {
   const contains = (request: CloseRequest) => !store || [...allTabs(store.getState().layoutByWorkspace[request.workspaceKey]?.root), ...(store.getState().sheetsByWorkspace?.[request.workspaceKey] ?? []).map((sheet: any) => sheet.tab)]
     .some(tab => tab.tabId === request.tabId && tab.target.agentId === request.agentId);
   const choose = async (request: CloseRequest): Promise<Choice> => {
-    if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request)) return "cancel";
+    if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request) || request.isCurrent?.() === false) return "cancel";
     pending = true;
     const signature = focus();
     let overlay: any;
@@ -46,7 +46,7 @@ export function installClosePolicy() {
         const finish = (choice: Choice) => {
           if (settled) return;
           settled = true;
-          resolve(choice !== "cancel" && (focus() !== signature || !contains(request)) ? "cancel" : choice);
+          resolve(choice !== "cancel" && (focus() !== signature || !contains(request) || request.isCurrent?.() === false) ? "cancel" : choice);
         };
         cancelPending = () => finish("cancel");
         overlay = document.createElement("div");
@@ -101,7 +101,7 @@ export function installClosePolicy() {
         const bounds = overlay.getBoundingClientRect();
         if (!overlay.isConnected || style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || bounds.width <= 0 || bounds.height <= 0) { finish("cancel"); return; }
         buttons[0].focus();
-        timer = window.setInterval(() => { if (focus() !== signature || !contains(request) || !overlay.isConnected) finish("cancel"); }, 40);
+        timer = window.setInterval(() => { if (focus() !== signature || !contains(request) || request.isCurrent?.() === false || !overlay.isConnected) finish("cancel"); }, 40);
         observer = new window.MutationObserver(() => { if (!overlay.isConnected) finish("cancel"); });
         observer.observe(document.body, { childList: true });
       });

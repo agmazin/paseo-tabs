@@ -29,8 +29,12 @@ try {
     args: [resolve("tests/browser/choice-host.cjs")], env: { ...process.env, CLOSE_FIXTURE_BASE: base },
   });
   const page = await electron.firstWindow();
+  const mutationFrames = [];
+  page.on("websocket", socket => socket.on("framesent", frame => {
+    try { const message = JSON.parse(String(frame.payload)); if (/archive|resume/i.test(message.type || "")) mutationFrames.push(message.type); } catch {}
+  }));
   page.on("pageerror", error => console.log("PAGE", error.message));
-  page.on("console", message => { if (message.type() === "error") console.log("ERROR", message.text().slice(0, 300)); });
+  page.on("console", message => { if (["error", "warning"].includes(message.type())) console.log(message.type().toUpperCase(), message.text().slice(0, 300)); });
   await page.waitForFunction(() => window.__paseoTabClosePolicy?.store, null, { timeout: 30000 });
   await page.waitForTimeout(2000);
   console.log("URL", page.url());
@@ -167,6 +171,28 @@ try {
     await cross(id);
     await page.keyboard.press("Escape");
     checks.push("plugin reload cancels an open decision; next click prompts again without delayed archive");
+  }
+  for (const child of [false, true]) {
+    const stale = await client.createAgent({ provider: "codex", cwd: base, workspaceId: fixture.workspaceId,
+      title: child ? "Archive race child" : "Archive race root", ...(child ? { callerAgentId: id } : {}),
+      labels: { "test.fixture": "explicit-close-0.4.1" } });
+    await open(stale.id);
+    await cross(stale.id);
+    const before = mutationFrames.length;
+    await client.archiveAgent(stale.id);
+    await page.getByTestId("paseo-tab-close-dialog").waitFor({ state: "detached" });
+    await page.waitForTimeout(100);
+    assert.equal(await archived(stale.id), true);
+    assert.equal(mutationFrames.length, before, "Archiving during the dialog must not send archive/resume from the UI");
+    checks.push(`external archive cancels an open ${child ? "child" : "root"} dialog without UI mutation RPC`);
+    await open(stale.id);
+    await page.getByTestId(`workspace-tab-agent_${stale.id}`).first().hover();
+    await page.getByTestId(`workspace-agent-close-${stale.id}`).first().click();
+    await page.getByTestId(`workspace-tab-agent_${stale.id}`).waitFor({ state: "detached" });
+    assert.equal(await page.getByTestId("paseo-tab-close-dialog").count(), 0);
+    assert.equal(await archived(stale.id), true);
+    assert.equal(mutationFrames.length, before, "Closing an archived tab must be local only");
+    checks.push(`archived ${child ? "child" : "root"} closes locally without dialog, archive/resume/unarchive RPC`);
   }
   for (const target of [...fixture.ids].reverse()) {
     await open(target);

@@ -22,6 +22,7 @@ test("Android/iOS contribute is safe with window=global and no DOM or addEventLi
       } }).outputText;
       const evaluate = runInContext(`(function(require,module,exports){${source}\n})`, context);
       evaluate((id: string) => {
+        if (id === "@getpaseo/plugin/client") return { getPaseoClient: () => { throw new Error("Native must not borrow a web host"); } };
         if (id === "react-native") return { Platform: { OS: platform } };
         assert.ok(id.startsWith("."), `Unexpected native runtime dependency: ${id}`);
         return load(resolve(dirname(path), `${id}.ts`));

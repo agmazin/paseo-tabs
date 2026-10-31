@@ -1,4 +1,5 @@
-import { installClosePolicy } from "./close-policy.web";
+import { getPaseoClient } from "@getpaseo/plugin/client";
+import { installClosePolicy, type CloseRequest } from "./close-policy.web";
 import { closeSelection, moduleCandidateIds, type CloseTab } from "../shared/close";
 
 declare const window: any;
@@ -62,6 +63,39 @@ function panes(root: any): any[] {
   return (root.group?.children ?? []).flatMap(panes);
 }
 
+export async function closeAgentTab(api: any, request: CloseRequest, policy = installClosePolicy()) {
+  if (!policy) return false;
+  const handle = api.agents.ref(request.agentId);
+  let invalidated = false;
+  const matches = () => {
+    const agent = handle.current();
+    return agent?.id === request.agentId && agent.workspaceId === request.workspaceKey.slice(request.workspaceKey.indexOf(":") + 1);
+  };
+  const active = () => !invalidated && matches() && !handle.current().archivedAt;
+  const stop = handle.subscribe((update: any) => {
+    if (update.kind === "remove" || !matches() || handle.current().archivedAt) {
+      invalidated = true;
+      policy.cancel();
+    }
+  });
+  try {
+    await handle.refresh();
+    if (!matches()) return false;
+    if (handle.current().archivedAt) { policy.close(request); return true; }
+    if (invalidated) return false;
+    const choice = await policy.choose({ ...request, isCurrent: active });
+    if (choice === "cancel" || !active()) return false;
+    await handle.refresh();
+    if (!active()) return false;
+    if (choice === "archive") await handle.archive();
+    else if (choice === "close") policy.close(request);
+    return true;
+  } catch (error) {
+    console.warn("[paseo-tabs] Close status unavailable; action cancelled", error);
+    return false;
+  } finally { stop(); }
+}
+
 export function interceptClose(store: Store) {
   let context: { key: string; tabId: string } | null = null;
   const entries = () => Object.entries(store.getState().layoutByWorkspace) as [string, any][];
@@ -87,17 +121,12 @@ export function interceptClose(store: Store) {
     for (const tab of tabs) {
       const id = tab.target.agentId;
       if (!id) continue;
-      const entry = window.__paseoTabsClose?.agents.get(id);
-      const api = entry?.workspaceId === key.slice(key.indexOf(":") + 1) ? entry.api : undefined;
-      const policy = installClosePolicy();
-      const choice = await policy?.choose({ workspaceKey: key, tabId: tab.tabId, agentId: id,
-        title: document.querySelector(`[data-testid="workspace-tab-${tab.tabId}"]`)?.getAttribute("aria-label") });
-      if (choice === "archive") {
-        try { await api?.agents.ref(id).archive(); }
-        catch (error) { console.warn("[paseo-tabs] Explicit archive failed", error); }
-      } else if (choice === "close" && locate(tab.tabId)?.key === key) {
-        policy?.close({ workspaceKey: key, tabId: tab.tabId, agentId: id });
-      } else return;
+      try {
+        const api = window.__paseoTabsClose.resolveHost(key.slice(0, key.indexOf(":")));
+        const choice = await closeAgentTab(api, { workspaceKey: key, tabId: tab.tabId, agentId: id,
+          title: document.querySelector(`[data-testid="workspace-tab-${tab.tabId}"]`)?.getAttribute("aria-label") });
+        if (!choice) return;
+      } catch (error) { console.warn("[paseo-tabs] Cannot resolve close status; action cancelled", error); return; }
     }
   };
   const click = (event: any) => {
@@ -242,11 +271,6 @@ export function mountClose(api?: any): () => void {
       const button = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
       if (!button) return;
       event.preventDefault(); event.stopImmediatePropagation();
-      if (event.type !== "click") return;
-      const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
-      if (!route) return;
-      const id = button.getAttribute("data-testid").slice("workspace-agent-close-".length);
-      void installClosePolicy()?.choose({ workspaceKey: `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`, tabId: `agent_${id}`, agentId: id });
     };
     for (const type of ["pointerdown", "mousedown", "click", "auxclick"]) window.addEventListener(type, earlyClick, true);
     const stop = startClose();
@@ -257,6 +281,7 @@ export function mountClose(api?: any): () => void {
       stop();
     };
   }
+  state.resolveHost = getPaseoClient;
   if (api) state.apis.add(api);
   state.count++;
   let released = false;

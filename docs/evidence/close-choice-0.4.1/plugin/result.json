@@ -19,6 +19,10 @@
     "dialog construction error leaves tab and archive unchanged",
     "Cmd+W uses the same mandatory dialog",
     "plugin reload cancels an open decision; next click prompts again without delayed archive",
+    "external archive cancels an open root dialog without UI mutation RPC",
+    "archived root closes locally without dialog, archive/resume/unarchive RPC",
+    "external archive cancels an open child dialog without UI mutation RPC",
+    "archived child closes locally without dialog, archive/resume/unarchive RPC",
     "explicit archive only after choice: child",
     "explicit archive only after choice: root",
     "explicit archive only after choice: root"

@@ -2,25 +2,39 @@
 > paseo-tabs@0.4.1 test
 > node --experimental-strip-types --test tests/*.test.mts
 
-✔ close selection preserves pane order and excludes the kept tab (1.86675ms)
-✔ module discovery follows source shape rather than a fixed module number (1.323709ms)
-✔ hidden sides count tabs under the edge counters (0.656667ms)
-✔ reveal brings the active tab clear of the counters and stays in range (0.253791ms)
-✔ flag picks the most important hidden status (0.177709ms)
-✔ running descendants count up the whole parent chain (1.004292ms)
-✔ a resting chat gives way to its subagents, other statuses stay native (0.116709ms)
-✔ vertical wheel scrolls horizontally, trackpad sideways stays native (0.063542ms)
-✔ search ignores case and ё (0.190042ms)
-✔ russian plural and native jump hints (0.195417ms)
-✔ native deployment rejects an unknown client before writing (2.057542ms)
-✔ native deployment is exact, idempotent, and reversible (2712.640708ms)
-✔ native callback never archives idle/running roots or children before an explicit choice (110.971583ms)
-✔ Android/iOS contribute is safe with window=global and no DOM or addEventListener (115.295417ms)
-ℹ tests 14
+[paseo-tabs] Close status unavailable; action cancelled Error: fixture fetch failed
+    at Object.refresh (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:42:109)
+    at Object.closeAgentTab (evalmachine.<anonymous>:99:22)
+    at TestContext.<anonymous> (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:50:26)
+    at async Test.run (node:internal/test_runner/test:1113:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+[paseo-tabs] Close status unavailable; action cancelled Error: fixture fetch failed
+    at Object.refresh (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:42:109)
+    at Object.closeAgentTab (evalmachine.<anonymous>:99:22)
+    at TestContext.<anonymous> (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:50:26)
+    at async Test.run (node:internal/test_runner/test:1113:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+✔ close selection preserves pane order and excludes the kept tab (0.837417ms)
+✔ module discovery follows source shape rather than a fixed module number (0.138334ms)
+✔ fallback closes archived root/child locally and cancels stale or unknown status (45.928708ms)
+✔ hidden sides count tabs under the edge counters (2.917209ms)
+✔ reveal brings the active tab clear of the counters and stays in range (0.673458ms)
+✔ flag picks the most important hidden status (0.114542ms)
+✔ running descendants count up the whole parent chain (0.119667ms)
+✔ a resting chat gives way to its subagents, other statuses stay native (0.075292ms)
+✔ vertical wheel scrolls horizontally, trackpad sideways stays native (0.052042ms)
+✔ search ignores case and ё (0.165292ms)
+✔ russian plural and native jump hints (0.071333ms)
+✔ native deployment rejects an unknown client before writing (2.064209ms)
+✔ native deployment is exact, idempotent, and reversible (2782.339708ms)
+✔ native callback never archives idle/running roots or children before an explicit choice (88.014208ms)
+✔ native callback cancels a stale choice and never uses another host's archived state (82.071042ms)
+✔ Android/iOS contribute is safe with window=global and no DOM or addEventListener (122.141334ms)
+ℹ tests 16
 ℹ suites 0
-ℹ pass 14
+ℹ pass 16
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 3100.870167
+ℹ duration_ms 3220.279
