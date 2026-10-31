@@ -206,7 +206,7 @@ function startClose(): () => void {
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.0");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.1");
       release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
@@ -227,7 +227,7 @@ function startClose(): () => void {
 export function mountClose(api?: any): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {};
   installClosePolicy();
-  const version = "0.4.0";
+  const version = "0.4.1";
   let state = window.__paseoTabsClose;
   if (!state || state.version !== version) {
     state?.dispose();

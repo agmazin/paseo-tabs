@@ -21,7 +21,7 @@ test("native deployment rejects an unknown client before writing", () => {
 
 test("native deployment is exact, idempotent, and reversible", { skip: !process.env.CLOSE_ORIGINAL_BUNDLE }, () => {
   const original = readFileSync(process.env.CLOSE_ORIGINAL_BUNDLE!, "utf8");
-  const originalIndex = readFileSync(join(dirname(process.env.CLOSE_ORIGINAL_BUNDLE!), "../../../../index.html"), "utf8");
+  const originalIndex = readFileSync(process.env.CLOSE_ORIGINAL_INDEX || join(dirname(process.env.CLOSE_ORIGINAL_BUNDLE!), "../../../../index.html"), "utf8");
   assert.equal(createHash("sha256").update(original).digest("hex"), ORIGINAL_SHA256);
   const patched = patchSource(original);
   assert.ok(patched.includes('c!=="close"'));
@@ -37,6 +37,22 @@ test("native deployment is exact, idempotent, and reversible", { skip: !process.
     assert.equal(deploy(directory, "rollback", backup).status, "rolled-back");
     assert.equal(readFileSync(path, "utf8"), original);
     assert.equal(readFileSync(join(directory, "index.html"), "utf8"), originalIndex);
+    if (process.env.CLOSE_PREVIOUS_BUNDLE && process.env.CLOSE_PREVIOUS_INDEX) {
+      const previous = readFileSync(process.env.CLOSE_PREVIOUS_BUNDLE, "utf8");
+      const previousIndex = readFileSync(process.env.CLOSE_PREVIOUS_INDEX, "utf8");
+      writeFileSync(path, previous);
+      writeFileSync(join(directory, "index.html"), previousIndex);
+      assert.equal(deploy(directory, "check", backup).status, "compatible");
+      assert.equal(deploy(directory, "apply", backup).status, "installed");
+      assert.equal(deploy(directory, "apply", backup).status, "already-installed");
+      assert.equal(deploy(directory, "rollback", backup).status, "rolled-back");
+      assert.equal(readFileSync(path, "utf8"), previous);
+      assert.equal(readFileSync(join(directory, "index.html"), "utf8"), previousIndex);
+      writeFileSync(join(directory, "index.html"), previousIndex + "changed");
+      assert.throws(() => deploy(directory, "apply", backup), /Unsupported/);
+      assert.equal(readFileSync(path, "utf8"), previous);
+      writeFileSync(join(directory, "index.html"), previousIndex);
+    }
     deploy(directory, "apply", backup);
     writeFileSync(path, readFileSync(path, "utf8") + "\nchanged");
     assert.throws(() => deploy(directory, "apply", backup), /matching deployment record/);

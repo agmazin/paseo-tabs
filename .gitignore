@@ -2,3 +2,5 @@ node_modules
 .DS_Store
 
 docs/evidence/close-choice-0.4.0/**/*.png
+
+docs/evidence/close-choice-0.4.1/**/*.png

@@ -15,7 +15,7 @@ const client = new DaemonClient({ url: `ws://${pid.listen}/ws`, clientId: "close
 const checks = [];
 let electron;
 const mode = process.env.CLOSE_MODE || "native";
-const out = resolve(`docs/evidence/close-choice-0.4.0/${mode}`);
+const out = resolve(`docs/evidence/close-choice-0.4.1/${mode}`);
 mkdirSync(out, { recursive: true });
 try {
   await client.connect();
@@ -57,7 +57,25 @@ try {
   const id = fixture.ids[0];
   await open(id);
   await cross(id);
-  await page.screenshot({ path: `${out}/mandatory-choice.png` });
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-cancel");
+  assert.equal(await page.getByRole("button", { name: "Отмена", exact: true }).count(), 0);
+  assert.equal(await page.getByTestId("paseo-tab-close-close").textContent(), "Закрыть");
+  assert.equal(await page.getByTestId("paseo-tab-close-archive").textContent(), "Архивировать");
+  assert.equal(await page.getByTestId("paseo-tab-close-cancel").getAttribute("aria-label"), "Отменить закрытие");
+  assert.equal(await page.getByTestId("paseo-tab-close-close").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(22, 101, 52)");
+  assert.equal(await page.getByTestId("paseo-tab-close-archive").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(154, 52, 18)");
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-archive");
+  await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-cancel");
+  assert.equal(await page.getByTestId("paseo-tab-close-cancel").evaluate(node => getComputedStyle(node).outlineStyle), "solid");
+  await page.screenshot({ path: `${out}/mandatory-choice-wide.png` });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: `${out}/mandatory-choice-compact.png` });
+  const box = await page.getByTestId("paseo-tab-close-close").boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 390);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  checks.push("new labels/colors, accessible cross, initial focus, visible focus, Tab wrap, wide/compact");
   await page.getByTestId("paseo-tab-close-cancel").click();
   assert.equal(await page.getByTestId(`workspace-tab-agent_${id}`).count(), 1);
   checks.push("cancel preserves tab and archive state");

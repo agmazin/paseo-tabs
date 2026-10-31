@@ -1,0 +1,27 @@
+{
+  "mode": "native",
+  "plugin": null,
+  "client": "0.14.0",
+  "daemon": "0.14.0",
+  "nativePolicy": "0.4.1",
+  "checks": [
+    "new labels/colors, accessible cross, initial focus, visible focus, Tab wrap, wide/compact",
+    "cancel preserves tab and archive state",
+    "Escape preserves tab and archive state",
+    "close hides root without archive",
+    "hidden root persists across UI reload",
+    "reopen always prompts again",
+    "close-only of an inactive child preserves the child and selected root",
+    "inactive root prompts and cancels",
+    "inactive root prompts and cancels",
+    "inactive child prompts and cancels",
+    "12 rapid clicks share one visible dialog; no delayed action after Escape",
+    "programmatic tab switch cancels pending decision",
+    "dialog construction error leaves tab and archive unchanged",
+    "missing runtime fails closed",
+    "Cmd+W uses the same mandatory dialog",
+    "explicit archive only after choice: child",
+    "explicit archive only after choice: root",
+    "explicit archive only after choice: root"
+  ]
+}
