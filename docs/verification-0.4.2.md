@@ -153,3 +153,21 @@ exact entry с cache key и validation экспортов. Проверка nati
 Fixture home остановлен: status localDaemon=stopped, pid=null, connectedDaemon=not_probed.
 Listener 6812 отсутствует, процессов choice-host.cjs и тестового daemon home нет.
 В этой корректировке fixture runtime не запускался; основной демон и prod не менялись.
+
+## Production verification после установки техлидом
+
+Техлид установил release checkout `036b3aed480a6138e5e8c06c94a90b9136c7063e`.
+Read-only проверка основного демона 0.13.2 (PID 2375) подтвердила running плагин,
+manifest `>=0.12.0 <0.15.0`, catalog clientBundle 60 274 байта с SHA-256
+`2418f693df48b7af7391580e6d7951e09901693abf34cfd6363fc1aa941d62e6`.
+В фактически отданном catalog bundle проверены версия 0.4.2, точный UI asset guard,
+оранжевый #f97316 и подписи действий (с учётом Unicode escaping компилятора).
+Native bundle/index совпали с SHA 0.4.2, указанными выше. Настоящий compatibility
+helper принял catalog requirements для daemon/app 0.13.2 и 0.14.0.
+
+Выполнялись только getDaemonStatus, listPlugins, getPluginCatalog и чтение файлов.
+Reload, restart и действия с личными вкладками не выполнялись. Текущий renderer
+не инспектировался: catalog и файлы не доказывают, какой marker он уже загрузил.
+Структурированное доказательство: `docs/evidence/close-choice-0.4.2/production.json`.
+После технической приёмки осталась только личная визуальная оценка Александра:
+новое штатное окно, оранжевая кнопка, крестик без квадрата.

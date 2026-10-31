@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-10-31T16:42:35.383Z",
+  "operations": [
+    "getDaemonStatus",
+    "listPlugins",
+    "getPluginCatalog",
+    "read installed files"
+  ],
+  "daemonVersion": "0.13.2",
+  "daemonPid": 2375,
+  "plugin": {
+    "id": "paseo-tabs",
+    "status": "running",
+    "path": "/Users/agmazin/Library/Developer/paseo-releases/paseo-tabs",
+    "requirements": {
+      "paseo": ">=0.12.0 <0.15.0"
+    },
+    "catalogBundleSha256": "2418f693df48b7af7391580e6d7951e09901693abf34cfd6363fc1aa941d62e6",
+    "catalogBundleBytes": 60274,
+    "markersVerified": true
+  },
+  "compatibility": [
+    "daemon 0.13.2",
+    "Android/app 0.13.2",
+    "daemon/app 0.14.0"
+  ],
+  "releaseCommit": "036b3aed480a6138e5e8c06c94a90b9136c7063e",
+  "nativeSha256": "2fb0ec9e897d41a501b75b40d28fabfe05959f535d446d89650c8f896ba79633",
+  "indexSha256": "383981f899f65852e30c81c9f2f9b4582e527594b56cccb4e8929c4b141162bf",
+  "rendererVersion": "not inspected; no claim",
+  "reloadPerformed": false,
+  "restartPerformed": false
+}
