@@ -1,0 +1,30 @@
+WARNING %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://
+WARNING [DesktopUpdater] Silent update check failed Unexpected response while checking desktop updates.
+WARNING Animated: `useNativeDriver` is not supported because the native animated module is missing. Falling back to JS-based animation. To resolve this, add `RCTAnimation` module to this app, or remove `useNativeDriver`. Make sure to run `bundle exec pod install` first. Read more about autolinking: https://
+URL paseo://app/open-project
+WARNING %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://
+WARNING [DesktopUpdater] Silent update check failed Unexpected response while checking desktop updates.
+WARNING Animated: `useNativeDriver` is not supported because the native animated module is missing. Falling back to JS-based animation. To resolve this, add `RCTAnimation` module to this app, or remove `useNativeDriver`. Make sure to run `bundle exec pod install` first. Read more about autolinking: https://
+WARNING %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://
+WARNING [DesktopUpdater] Silent update check failed Unexpected response while checking desktop updates.
+WARNING Animated: `useNativeDriver` is not supported because the native animated module is missing. Falling back to JS-based animation. To resolve this, add `RCTAnimation` module to this app, or remove `useNativeDriver`. Make sure to run `bundle exec pod install` first. Read more about autolinking: https://
+WARNING [paseo-tabs] Close dialog unavailable; action cancelled Error: fixture dialog failure
+    at document.body.appendChild (eval at evaluate (:370:30), <anonymous>:4:108)
+    at eval (eval at _e.runPluginClientBundle (paseo://app/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js:16916:7750),
+WARNING [DesktopIdle] Invalid system idle time null
+["new labels/colors, accessible cross, initial focus, visible focus, Tab wrap, wide/compact","cancel preserves tab and archive state","Escape preserves tab and archive state","close hides root without archive","hidden root persists across UI reload","reopen always prompts again","close-only of an inactive child preserves the child and selected root","inactive root prompts and cancels","inactive root prompts and cancels","inactive child prompts and cancels","12 rapid clicks share one visible dialog; no delayed action after Escape","programmatic tab switch cancels pending decision","dialog construction error leaves tab and archive unchanged","Cmd+W uses the same mandatory dialog","plugin reload cancels an open decision; next click prompts again without delayed archive","external archive cancels an open root dialog without UI mutation RPC","archived root closes locally without dialog, archive/resume/unarchive RPC","external archive cancels an open child dialog without UI mutation RPC","archived child closes locally without dialog, archive/resume/unarchive RPC","explicit archive only after choice: child","explicit archive only after choice: root","explicit archive only after choice: root"]

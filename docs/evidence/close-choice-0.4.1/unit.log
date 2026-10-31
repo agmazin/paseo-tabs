@@ -1,0 +1,40 @@
+
+> paseo-tabs@0.4.1 test
+> node --experimental-strip-types --test tests/*.test.mts
+
+[paseo-tabs] Close status unavailable; action cancelled Error: fixture fetch failed
+    at Object.refresh (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:42:109)
+    at Object.closeAgentTab (evalmachine.<anonymous>:100:22)
+    at TestContext.<anonymous> (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:50:26)
+    at async Test.run (node:internal/test_runner/test:1113:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+[paseo-tabs] Close status unavailable; action cancelled Error: fixture fetch failed
+    at Object.refresh (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:42:109)
+    at Object.closeAgentTab (evalmachine.<anonymous>:100:22)
+    at TestContext.<anonymous> (file:///Users/agmazin/Yandex.Disk.localized/public/projects/local/paseo-tabs-close-ui/tests/close.test.mts:50:26)
+    at async Test.run (node:internal/test_runner/test:1113:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+✔ close selection preserves pane order and excludes the kept tab (0.865083ms)
+✔ module discovery follows source shape rather than a fixed module number (0.147334ms)
+✔ fallback closes archived root/child locally and cancels stale or unknown status (56.064292ms)
+✔ hidden sides count tabs under the edge counters (1.309375ms)
+✔ reveal brings the active tab clear of the counters and stays in range (0.1685ms)
+✔ flag picks the most important hidden status (0.070625ms)
+✔ running descendants count up the whole parent chain (0.09875ms)
+✔ a resting chat gives way to its subagents, other statuses stay native (0.067166ms)
+✔ vertical wheel scrolls horizontally, trackpad sideways stays native (0.048042ms)
+✔ search ignores case and ё (0.150916ms)
+✔ russian plural and native jump hints (0.064209ms)
+✔ native deployment rejects an unknown client before writing (1.871459ms)
+✔ native deployment is exact, idempotent, and reversible (2907.236416ms)
+✔ native callback never archives idle/running roots or children before an explicit choice (96.844041ms)
+✔ native callback cancels a stale choice and never uses another host's archived state (91.28575ms)
+✔ Android/iOS contribute is safe with window=global and no DOM or addEventListener (130.386416ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3430.952458

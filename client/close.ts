@@ -1,10 +1,12 @@
-import { installClosePolicy } from "./close-policy.web";
+import { getPaseoClient } from "@getpaseo/plugin/client";
+import { installClosePolicy, type CloseRequest } from "./close-policy.web";
 import { closeSelection, moduleCandidateIds, type CloseTab } from "../shared/close";
 
 declare const window: any;
 declare const document: any;
 declare const fetch: any;
 type Store = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void };
+const hasCurrentNativePolicy = () => !!window.__paseoNativeTabCloseVersion && window.__paseoNativeTabCloseVersion !== "0.4.0";
 const TAB = 'button[data-testid^="workspace-tab-"][aria-selected]';
 
 export function observeCloseAgent(api: any, agent: { id: string; workspaceId?: string }, removed = false) {
@@ -62,6 +64,39 @@ function panes(root: any): any[] {
   return (root.group?.children ?? []).flatMap(panes);
 }
 
+export async function closeAgentTab(api: any, request: CloseRequest, policy = installClosePolicy()) {
+  if (!policy) return false;
+  const handle = api.agents.ref(request.agentId);
+  let invalidated = false;
+  const matches = () => {
+    const agent = handle.current();
+    return agent?.id === request.agentId && agent.workspaceId === request.workspaceKey.slice(request.workspaceKey.indexOf(":") + 1);
+  };
+  const active = () => !invalidated && matches() && !handle.current().archivedAt;
+  const stop = handle.subscribe((update: any) => {
+    if (update.kind === "remove" || !matches() || handle.current().archivedAt) {
+      invalidated = true;
+      policy.cancel();
+    }
+  });
+  try {
+    await handle.refresh();
+    if (!matches()) return false;
+    if (handle.current().archivedAt) { policy.close(request); return true; }
+    if (invalidated) return false;
+    const choice = await policy.choose({ ...request, isCurrent: active });
+    if (choice === "cancel" || !active()) return false;
+    await handle.refresh();
+    if (!active()) return false;
+    if (choice === "archive") await handle.archive();
+    else if (choice === "close") policy.close(request);
+    return true;
+  } catch (error) {
+    console.warn("[paseo-tabs] Close status unavailable; action cancelled", error);
+    return false;
+  } finally { stop(); }
+}
+
 export function interceptClose(store: Store) {
   let context: { key: string; tabId: string } | null = null;
   const entries = () => Object.entries(store.getState().layoutByWorkspace) as [string, any][];
@@ -87,21 +122,16 @@ export function interceptClose(store: Store) {
     for (const tab of tabs) {
       const id = tab.target.agentId;
       if (!id) continue;
-      const entry = window.__paseoTabsClose?.agents.get(id);
-      const api = entry?.workspaceId === key.slice(key.indexOf(":") + 1) ? entry.api : undefined;
-      const policy = installClosePolicy();
-      const choice = await policy?.choose({ workspaceKey: key, tabId: tab.tabId, agentId: id,
-        title: document.querySelector(`[data-testid="workspace-tab-${tab.tabId}"]`)?.getAttribute("aria-label") });
-      if (choice === "archive") {
-        try { await api?.agents.ref(id).archive(); }
-        catch (error) { console.warn("[paseo-tabs] Explicit archive failed", error); }
-      } else if (choice === "close" && locate(tab.tabId)?.key === key) {
-        policy?.close({ workspaceKey: key, tabId: tab.tabId, agentId: id });
-      } else return;
+      try {
+        const api = window.__paseoTabsClose.resolveHost(key.slice(0, key.indexOf(":")));
+        const choice = await closeAgentTab(api, { workspaceKey: key, tabId: tab.tabId, agentId: id,
+          title: document.querySelector(`[data-testid="workspace-tab-${tab.tabId}"]`)?.getAttribute("aria-label") });
+        if (!choice) return;
+      } catch (error) { console.warn("[paseo-tabs] Cannot resolve close status; action cancelled", error); return; }
     }
   };
   const click = (event: any) => {
-    if (window.__paseoNativeTabCloseVersion) return;
+    if (hasCurrentNativePolicy()) return;
     const cross = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
     if (cross) {
       stop(event);
@@ -142,7 +172,7 @@ export function interceptClose(store: Store) {
     context = found ? { key: found.key, tabId: found.tab.tabId } : null;
   };
   const closeCurrent = () => {
-    if (window.__paseoNativeTabCloseVersion) return false;
+    if (hasCurrentNativePolicy()) return false;
     if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return true;
     const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
     const workspace = route ? entries().find(([key]) => key === `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`) : null;
@@ -206,7 +236,7 @@ function startClose(): () => void {
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.0");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.1");
       release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
@@ -227,26 +257,21 @@ function startClose(): () => void {
 export function mountClose(api?: any): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {};
   installClosePolicy();
-  const version = "0.4.0";
+  const version = "0.4.1";
   let state = window.__paseoTabsClose;
   if (!state || state.version !== version) {
     state?.dispose();
     state = { version, count: 0, apis: new Set(), agents: new Map() };
     window.__paseoTabsClose = state;
     state.closeCurrent = () => {
-      if (window.__paseoNativeTabCloseVersion) return false;
+      if (hasCurrentNativePolicy()) return false;
       return true;
     };
     const earlyClick = (event: any) => {
-      if (window.__paseoNativeTabCloseVersion || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
+      if (hasCurrentNativePolicy() || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
       const button = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
       if (!button) return;
       event.preventDefault(); event.stopImmediatePropagation();
-      if (event.type !== "click") return;
-      const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
-      if (!route) return;
-      const id = button.getAttribute("data-testid").slice("workspace-agent-close-".length);
-      void installClosePolicy()?.choose({ workspaceKey: `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`, tabId: `agent_${id}`, agentId: id });
     };
     for (const type of ["pointerdown", "mousedown", "click", "auxclick"]) window.addEventListener(type, earlyClick, true);
     const stop = startClose();
@@ -257,6 +282,7 @@ export function mountClose(api?: any): () => void {
       stop();
     };
   }
+  state.resolveHost = getPaseoClient;
   if (api) state.apis.add(api);
   state.count++;
   let released = false;

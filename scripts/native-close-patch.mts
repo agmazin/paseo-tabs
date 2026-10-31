@@ -4,7 +4,9 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-export const VERSION = "0.4.0";
+export const VERSION = "0.4.1";
+export const PREVIOUS_SHA256 = "8408efbadbedc495b412ad1f2bb61d310d29878e7958f2792b79de705e379647";
+export const PREVIOUS_INDEX_SHA256 = "7ce1fe368c8b087ee64b9e609ef6cf36fc5037b31cb2607e4268b902fa107d83";
 export const BUNDLE = "_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js";
 export const ORIGINAL_SHA256 = "e34d305be181eda51066d03f7d1516b4603cc4661643e1ca3d818f2bba3e7363";
 export const ORIGINAL_INDEX_SHA256 = "e43e6f3cb52d9affede68829baf465cc25d36692e720aa0ee57858637780316f";
@@ -24,7 +26,7 @@ export function patchSource(source: string) {
   if (source.split(start).length !== 2 || source.split(end).length !== 2) throw new Error("Native close callback contract changed");
   const from = source.indexOf(start), to = source.indexOf(end, from);
   if (to < from) throw new Error("Native close callback boundary changed");
-  const callback = 'const{tabId:t,agentId:s}=e;await yr(t,async()=>{if(!te||!Ga)return;const a=re.useSessionStore.getState().sessions[te]?.agents?.get(s);if(!a||a.archivedAt)return;let c="cancel";try{c=await globalThis.__paseoTabClosePolicy?.choose({workspaceKey:Ga,tabId:t,agentId:s,title:a.title})}catch(e){console.warn("[paseo-tabs] Close dialog failed; action cancelled",e)}if(c==="archive"){try{await Wt({serverId:te,agentId:s})}catch(e){console.warn("[paseo-tabs] Explicit archive failed",e)}return}if(c!=="close")return;zr(e=>e===t?null:e);globalThis.__paseoTabClosePolicy?.close({workspaceKey:Ga,tabId:t,agentId:s})';
+  const callback = 'const{tabId:t,agentId:s}=e;await yr(t,async()=>{if(!te||!Ga||!Ga.startsWith(te+":"))return;const read=()=>re.useSessionStore.getState().sessions[te]?.agents?.get(s);let a=read();if(!a){try{a=(await re.useSessionStore.getState().sessions[te]?.client?.fetchAgent(s))?.agent}catch(e){console.warn("[paseo-tabs] Close status unavailable; action cancelled",e)}}if(!a)return;const p=globalThis.__paseoTabClosePolicy;const request={workspaceKey:Ga,tabId:t,agentId:s,title:a.title};const local=()=>{zr(e=>e===t?null:e);p?.close(request)};if(a.archivedAt){local();return}let invalidated=false;const active=()=>!invalidated&&!!read()&&!read().archivedAt;let c="cancel";const stop=re.useSessionStore.subscribe(()=>{if(!active()){invalidated=true;p?.cancel()}});try{c=await p?.choose({...request,isCurrent:active})}catch(e){console.warn("[paseo-tabs] Close dialog failed; action cancelled",e)}finally{stop()}if(!active())return;if(c==="archive"){try{await Wt({serverId:te,agentId:s})}catch(e){console.warn("[paseo-tabs] Explicit archive failed",e)}return}if(c!=="close")return;local()';
   let result = source.slice(0, from) + callback + source.slice(to);
   result = replaceOnce(result, 'const ue=ie();function le(){', 'const ue=ie();globalThis.__paseoTabClosePolicy?.attachStore(ue);function le(){');
   result = replaceOnce(result,
@@ -40,37 +42,51 @@ export function deploy(directory: string, action = "check", backupDirectory = jo
   const installed = readFileSync(path, "utf8");
   const indexPath = join(directory, "index.html");
   const installedIndex = readFileSync(indexPath, "utf8");
-  const recordPath = join(backupDirectory, `${ORIGINAL_SHA256}.json`);
-  const originalPath = join(backupDirectory, `${ORIGINAL_SHA256}.js`);
-  const originalIndexPath = join(backupDirectory, `${ORIGINAL_INDEX_SHA256}.html`);
-  const patched = installed.startsWith(MARKER) ? installed : patchSource(installed);
-
-  if (installed.startsWith(MARKER)) {
-    if (!existsSync(recordPath) || JSON.parse(readFileSync(recordPath, "utf8")).patchedSha256 !== hash(installed) || JSON.parse(readFileSync(recordPath, "utf8")).patchedIndexSha256 !== hash(installedIndex))
-      throw new Error("Installed patch has no matching deployment record; no files changed");
-    if (action !== "rollback") return { status: "already-installed", path, sha256: hash(installed), version: VERSION };
-  }
-  if (!installed.startsWith(MARKER) && hash(installedIndex) !== ORIGINAL_INDEX_SHA256) throw new Error("Unsupported Paseo index; no files changed");
-  const originalIndex = installed.startsWith(MARKER) ? readFileSync(originalIndexPath, "utf8") : installedIndex;
+  if (!["check", "apply", "rollback"].includes(action)) throw new Error("Use check, apply, or rollback");
+  const recordPath = join(backupDirectory, `${ORIGINAL_SHA256}-${VERSION}.json`);
+  const backup = (sha: string, extension: string) => join(backupDirectory, `${sha}.${extension}`);
+  const verified = (sha: string, extension: string) => {
+    const value = readFileSync(backup(sha, extension), "utf8");
+    if (hash(value) !== sha) throw new Error("Backup hash mismatch; no files changed");
+    return value;
+  };
+  const currentSha = hash(installed), currentIndexSha = hash(installedIndex);
+  const isOriginal = currentSha === ORIGINAL_SHA256 && currentIndexSha === ORIGINAL_INDEX_SHA256;
+  const isPrevious = currentSha === PREVIOUS_SHA256 && currentIndexSha === PREVIOUS_INDEX_SHA256;
+  if (!isOriginal && !isPrevious && !installed.startsWith(MARKER)) throw new Error("Unsupported Paseo bundle/index; no files changed");
+  const original = isOriginal ? installed : verified(ORIGINAL_SHA256, "js");
+  const originalIndex = isOriginal ? installedIndex : verified(ORIGINAL_INDEX_SHA256, "html");
+  const patched = patchSource(original);
   const patchedIndex = replaceOnce(originalIndex, `src="/${BUNDLE}"`, `src="/${BUNDLE}?paseo-tabs-close=${VERSION}-${hash(patched).slice(0, 16)}"`);
-  if (action === "check") return { status: "compatible", path, originalSha256: hash(installed), patchedSha256: hash(patched), version: VERSION };
-  if (!["apply", "rollback"].includes(action)) throw new Error("Use check, apply, or rollback");
+  const isCurrent = installed === patched && installedIndex === patchedIndex;
+  if (!isOriginal && !isPrevious && !isCurrent) throw new Error("Unsupported Paseo bundle/index or matching deployment record; no files changed");
+  if (isCurrent) {
+    if (!existsSync(recordPath)) throw new Error("Installed patch has no matching deployment record; no files changed");
+    const record = JSON.parse(readFileSync(recordPath, "utf8"));
+    if (record.patchedSha256 !== currentSha || record.patchedIndexSha256 !== currentIndexSha) throw new Error("Installed patch has no matching deployment record; no files changed");
+  }
+  if (isCurrent && action !== "rollback") return { status: "already-installed", path, sha256: currentSha, indexSha256: currentIndexSha, version: VERSION };
+  if (action === "check") return { status: "compatible", path, originalSha256: currentSha, patchedSha256: hash(patched), patchedIndexSha256: hash(patchedIndex), version: VERSION };
+  let nextBundle = patched, nextIndex = patchedIndex;
   if (action === "rollback") {
-    const original = readFileSync(originalPath);
-    if (hash(original) !== ORIGINAL_SHA256) throw new Error("Backup hash mismatch; no files changed");
-    if (hash(originalIndex) !== ORIGINAL_INDEX_SHA256) throw new Error("Index backup hash mismatch; no files changed");
-    writeFileSync(`${path}.tmp`, original);
-    writeFileSync(`${indexPath}.tmp`, originalIndex);
+    if (!isCurrent) throw new Error("Only the exact current patch can be rolled back; no files changed");
+    const record = JSON.parse(readFileSync(recordPath, "utf8"));
+    if (record.patchedSha256 !== currentSha || record.patchedIndexSha256 !== currentIndexSha ||
+      ![[ORIGINAL_SHA256, ORIGINAL_INDEX_SHA256], [PREVIOUS_SHA256, PREVIOUS_INDEX_SHA256]].some(([bundle, index]) => bundle === record.previousSha256 && index === record.previousIndexSha256))
+      throw new Error("Invalid rollback record; no files changed");
+    nextBundle = verified(record.previousSha256, "js");
+    nextIndex = verified(record.previousIndexSha256, "html");
   } else {
     mkdirSync(backupDirectory, { recursive: true });
-    if (!existsSync(originalPath)) writeFileSync(originalPath, installed, { flag: "wx" });
-    if (hash(readFileSync(originalPath)) !== ORIGINAL_SHA256) throw new Error("Backup hash mismatch; no files changed");
-    if (!existsSync(originalIndexPath)) writeFileSync(originalIndexPath, installedIndex, { flag: "wx" });
-    if (hash(readFileSync(originalIndexPath)) !== ORIGINAL_INDEX_SHA256) throw new Error("Index backup hash mismatch; no files changed");
-    writeFileSync(recordPath, JSON.stringify({ version: VERSION, originalSha256: ORIGINAL_SHA256, patchedSha256: hash(patched), originalIndexSha256: ORIGINAL_INDEX_SHA256, patchedIndexSha256: hash(patchedIndex), path, replacements: 3, cacheKey: `${VERSION}-${hash(patched).slice(0, 16)}` }, null, 2) + "\n");
-    writeFileSync(`${path}.tmp`, patched);
-    writeFileSync(`${indexPath}.tmp`, patchedIndex);
+    for (const [sha, extension, value] of [[currentSha, "js", installed], [currentIndexSha, "html", installedIndex]]) {
+      if (!existsSync(backup(sha, extension))) writeFileSync(backup(sha, extension), value, { flag: "wx" });
+      verified(sha, extension);
+    }
+    writeFileSync(recordPath, JSON.stringify({ version: VERSION, previousSha256: currentSha, previousIndexSha256: currentIndexSha,
+      patchedSha256: hash(patched), patchedIndexSha256: hash(patchedIndex), path }, null, 2) + "\n");
   }
+  writeFileSync(`${path}.tmp`, nextBundle);
+  writeFileSync(`${indexPath}.tmp`, nextIndex);
   try {
     renameSync(`${path}.tmp`, path);
     renameSync(`${indexPath}.tmp`, indexPath);

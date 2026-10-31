@@ -1,0 +1,8 @@
+{
+  "status": "compatible",
+  "path": "/Applications/Paseo.app/Contents/Resources/app-dist/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js",
+  "originalSha256": "8408efbadbedc495b412ad1f2bb61d310d29878e7958f2792b79de705e379647",
+  "patchedSha256": "80161ccff233ffc308473699ed096d9a228d2f215f085665571d48ba50701a8f",
+  "patchedIndexSha256": "738f1a9a437b7dcce8b272b787e8fe2f2a6f0d81ab9b0ec996da8e3012efe484",
+  "version": "0.4.1"
+}

@@ -15,7 +15,7 @@ const client = new DaemonClient({ url: `ws://${pid.listen}/ws`, clientId: "close
 const checks = [];
 let electron;
 const mode = process.env.CLOSE_MODE || "native";
-const out = resolve(`docs/evidence/close-choice-0.4.0/${mode}`);
+const out = resolve(`docs/evidence/close-choice-0.4.1/${mode}`);
 mkdirSync(out, { recursive: true });
 try {
   await client.connect();
@@ -29,10 +29,19 @@ try {
     args: [resolve("tests/browser/choice-host.cjs")], env: { ...process.env, CLOSE_FIXTURE_BASE: base },
   });
   const page = await electron.firstWindow();
+  const mutationFrames = [];
+  page.on("websocket", socket => socket.on("framesent", frame => {
+    try { const envelope = JSON.parse(String(frame.payload)); const message = envelope.message || envelope; if (/archive|resume/i.test(message.type || "")) mutationFrames.push(message.type); } catch {}
+  }));
   page.on("pageerror", error => console.log("PAGE", error.message));
-  page.on("console", message => { if (message.type() === "error") console.log("ERROR", message.text().slice(0, 300)); });
+  page.on("console", message => { if (["error", "warning"].includes(message.type())) console.log(message.type().toUpperCase(), message.text().slice(0, 300)); });
   await page.waitForFunction(() => window.__paseoTabClosePolicy?.store, null, { timeout: 30000 });
   await page.waitForTimeout(2000);
+  if (mode === "hot-upgrade") {
+    assert.equal(await page.evaluate(() => window.__paseoNativeTabCloseVersion), "0.4.0");
+    assert.equal(await page.evaluate(() => window.__paseoTabClosePolicy.version), "0.4.1");
+    checks.push("old native 0.4.0 bootstrap uses new 0.4.1 plugin fallback without UI reload");
+  }
   console.log("URL", page.url());
   await page.screenshot({ path: `${out}/initial.png` });
   const open = async id => {
@@ -57,7 +66,25 @@ try {
   const id = fixture.ids[0];
   await open(id);
   await cross(id);
-  await page.screenshot({ path: `${out}/mandatory-choice.png` });
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-cancel");
+  assert.equal(await page.getByRole("button", { name: "Отмена", exact: true }).count(), 0);
+  assert.equal(await page.getByTestId("paseo-tab-close-close").textContent(), "Закрыть");
+  assert.equal(await page.getByTestId("paseo-tab-close-archive").textContent(), "Архивировать");
+  assert.equal(await page.getByTestId("paseo-tab-close-cancel").getAttribute("aria-label"), "Отменить закрытие");
+  assert.equal(await page.getByTestId("paseo-tab-close-close").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(22, 101, 52)");
+  assert.equal(await page.getByTestId("paseo-tab-close-archive").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(154, 52, 18)");
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-archive");
+  await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "paseo-tab-close-cancel");
+  assert.equal(await page.getByTestId("paseo-tab-close-cancel").evaluate(node => getComputedStyle(node).outlineStyle), "solid");
+  await page.screenshot({ path: `${out}/mandatory-choice-wide.png` });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: `${out}/mandatory-choice-compact.png` });
+  const box = await page.getByTestId("paseo-tab-close-close").boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 390);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  checks.push("new labels/colors, accessible cross, initial focus, visible focus, Tab wrap, wide/compact");
   await page.getByTestId("paseo-tab-close-cancel").click();
   assert.equal(await page.getByTestId(`workspace-tab-agent_${id}`).count(), 1);
   checks.push("cancel preserves tab and archive state");
@@ -150,6 +177,28 @@ try {
     await page.keyboard.press("Escape");
     checks.push("plugin reload cancels an open decision; next click prompts again without delayed archive");
   }
+  for (const child of [false, true]) {
+    const stale = await client.createAgent({ provider: "codex", cwd: base, workspaceId: fixture.workspaceId,
+      title: child ? "Archive race child" : "Archive race root", ...(child ? { callerAgentId: id } : {}),
+      labels: { "test.fixture": "explicit-close-0.4.1" } });
+    await open(stale.id);
+    await cross(stale.id);
+    const before = mutationFrames.length;
+    await client.archiveAgent(stale.id);
+    await page.getByTestId("paseo-tab-close-dialog").waitFor({ state: "detached" });
+    await page.waitForTimeout(100);
+    assert.equal(await archived(stale.id), true);
+    assert.equal(mutationFrames.length, before, "Archiving during the dialog must not send archive/resume from the UI");
+    checks.push(`external archive cancels an open ${child ? "child" : "root"} dialog without UI mutation RPC`);
+    await open(stale.id);
+    await page.getByTestId(`workspace-tab-agent_${stale.id}`).first().hover();
+    await page.getByTestId(`workspace-agent-close-${stale.id}`).first().click();
+    await page.getByTestId(`workspace-tab-agent_${stale.id}`).waitFor({ state: "detached" });
+    assert.equal(await page.getByTestId("paseo-tab-close-dialog").count(), 0);
+    assert.equal(await archived(stale.id), true);
+    assert.equal(mutationFrames.length, before, "Closing an archived tab must be local only");
+    checks.push(`archived ${child ? "child" : "root"} closes locally without dialog, archive/resume/unarchive RPC`);
+  }
   for (const target of [...fixture.ids].reverse()) {
     await open(target);
     await cross(target);
@@ -158,7 +207,8 @@ try {
     assert.equal(await archived(target), true);
     checks.push(`explicit archive only after choice: ${target === fixture.ids[2] ? "child" : "root"}`);
   }
-  writeFileSync(`${out}/result.json`, JSON.stringify({ mode, plugin: await page.evaluate(() => window.__paseoTabsClose?.version ?? null), client: "0.14.0", daemon: (await client.getDaemonStatus()).version,
+  assert.ok(mutationFrames.includes("archive_agent_request"), "UI websocket observer must capture explicit fixture archives");
+  writeFileSync(`${out}/result.json`, JSON.stringify({ mode, observedUiMutations: mutationFrames, plugin: await page.evaluate(() => window.__paseoTabsClose?.version ?? null), client: "0.14.0", daemon: (await client.getDaemonStatus()).version,
     nativePolicy: await page.evaluate(() => window.__paseoNativeTabCloseVersion), checks }, null, 2) + "\n");
   console.log(JSON.stringify(checks));
 } finally { await electron?.close(); await client.close(); }

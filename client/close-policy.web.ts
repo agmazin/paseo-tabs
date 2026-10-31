@@ -5,8 +5,8 @@ declare const document: any;
 
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
-export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string };
-const VERSION = "0.4.0";
+export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
+const VERSION = "0.4.1";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {
@@ -32,7 +32,7 @@ export function installClosePolicy() {
   const contains = (request: CloseRequest) => !store || [...allTabs(store.getState().layoutByWorkspace[request.workspaceKey]?.root), ...(store.getState().sheetsByWorkspace?.[request.workspaceKey] ?? []).map((sheet: any) => sheet.tab)]
     .some(tab => tab.tabId === request.tabId && tab.target.agentId === request.agentId);
   const choose = async (request: CloseRequest): Promise<Choice> => {
-    if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request)) return "cancel";
+    if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request) || request.isCurrent?.() === false) return "cancel";
     pending = true;
     const signature = focus();
     let overlay: any;
@@ -46,7 +46,7 @@ export function installClosePolicy() {
         const finish = (choice: Choice) => {
           if (settled) return;
           settled = true;
-          resolve(choice !== "cancel" && (focus() !== signature || !contains(request)) ? "cancel" : choice);
+          resolve(choice !== "cancel" && (focus() !== signature || !contains(request) || request.isCurrent?.() === false) ? "cancel" : choice);
         };
         cancelPending = () => finish("cancel");
         overlay = document.createElement("div");
@@ -56,11 +56,11 @@ export function installClosePolicy() {
         overlay.setAttribute("aria-labelledby", "paseo-tab-close-title");
         overlay.style.cssText = "box-sizing:border-box;position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:20px;color:var(--foreground,#eee);font:14px system-ui;-webkit-app-region:no-drag";
         const panel = document.createElement("div");
-        panel.style.cssText = "box-sizing:border-box;width:420px;max-width:100%;background:#202421;border:1px solid #4b524c;border-radius:14px;padding:24px;box-shadow:0 16px 60px #0008";
+        panel.style.cssText = "box-sizing:border-box;position:relative;width:420px;max-width:100%;background:#202421;border:1px solid #4b524c;border-radius:14px;padding:24px;box-shadow:0 16px 60px #0008";
         const heading = document.createElement("h2");
         heading.id = "paseo-tab-close-title";
         heading.textContent = "Закрыть вкладку?";
-        heading.style.cssText = "font-size:18px;margin:0 0 12px";
+        heading.style.cssText = "font-size:18px;margin:0 32px 12px 0";
         const title = document.createElement("p");
         title.textContent = request.title || "Чат";
         title.style.cssText = "overflow-wrap:anywhere;margin:0 0 12px";
@@ -70,15 +70,20 @@ export function installClosePolicy() {
         const actions = document.createElement("div");
         actions.style.cssText = "display:flex;flex-wrap:wrap;gap:8px";
         const buttons: any[] = [];
-        for (const [label, choice] of [["Закрыть вкладку", "close"], ["В архив", "archive"], ["Отмена", "cancel"]] as const) {
+        for (const [label, choice] of [["Отменить закрытие", "cancel"], ["Закрыть", "close"], ["Архивировать", "archive"]] as const) {
           const button = document.createElement("button");
           button.type = "button";
-          button.textContent = label;
+          button.textContent = choice === "cancel" ? "×" : label;
+          button.setAttribute("aria-label", label);
           button.dataset.testid = `paseo-tab-close-${choice}`;
-          button.style.cssText = "border:1px solid #69746a;border-radius:8px;background:#313a33;color:#fff;padding:10px 12px;cursor:pointer;font:inherit";
+          button.style.cssText = "border:1px solid #69746a;border-radius:8px;background:#166534;color:#fff;padding:10px 12px;cursor:pointer;font:inherit";
+          if (choice === "archive") button.style.background = "#9a3412";
+          if (choice === "cancel") button.style.cssText = "position:absolute;top:12px;right:12px;width:36px;height:36px;border:1px solid transparent;border-radius:8px;background:transparent;color:#eee;font:26px system-ui;cursor:pointer";
+          button.addEventListener("focus", () => { button.style.outline = "2px solid #f8fafc"; button.style.outlineOffset = "3px"; });
+          button.addEventListener("blur", () => { button.style.outline = ""; button.style.outlineOffset = ""; });
           button.addEventListener("click", () => finish(choice));
           buttons.push(button);
-          actions.appendChild(button);
+          (choice === "cancel" ? panel : actions).appendChild(button);
         }
         panel.append(heading, title, explanation, actions);
         overlay.appendChild(panel);
@@ -87,7 +92,7 @@ export function installClosePolicy() {
           if (event.key === "Tab") {
             event.preventDefault(); event.stopImmediatePropagation();
             const index = buttons.indexOf(document.activeElement);
-            buttons[(index + (event.shiftKey ? 2 : 1)) % buttons.length].focus();
+            buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
           }
         };
         window.addEventListener("keydown", key, true);
@@ -95,8 +100,8 @@ export function installClosePolicy() {
         const style = window.getComputedStyle(overlay);
         const bounds = overlay.getBoundingClientRect();
         if (!overlay.isConnected || style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || bounds.width <= 0 || bounds.height <= 0) { finish("cancel"); return; }
-        buttons[2].focus();
-        timer = window.setInterval(() => { if (focus() !== signature || !contains(request) || !overlay.isConnected) finish("cancel"); }, 40);
+        buttons[0].focus();
+        timer = window.setInterval(() => { if (focus() !== signature || !contains(request) || request.isCurrent?.() === false || !overlay.isConnected) finish("cancel"); }, 40);
         observer = new window.MutationObserver(() => { if (!overlay.isConnected) finish("cancel"); });
         observer.observe(document.body, { childList: true });
       });
