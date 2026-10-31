@@ -1,3 +1,4 @@
+import { installClosePolicy } from "./close-policy.web";
 import { closeSelection, moduleCandidateIds, type CloseTab } from "../shared/close";
 
 declare const window: any;
@@ -5,6 +6,22 @@ declare const document: any;
 declare const fetch: any;
 type Store = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void };
 const TAB = 'button[data-testid^="workspace-tab-"][aria-selected]';
+
+export function observeCloseAgent(api: any, agent: { id: string; workspaceId?: string }, removed = false) {
+  const state = window.__paseoTabsClose;
+  if (!state) return;
+  if (removed) {
+    if (state.agents.get(agent.id)?.api === api) state.agents.delete(agent.id);
+    return;
+  }
+  state.agents.set(agent.id, { api, workspaceId: agent.workspaceId });
+}
+
+export function releaseCloseAgents(api: any) {
+  const agents = window.__paseoTabsClose?.agents;
+  if (!agents) return;
+  for (const [id, entry] of agents) if (entry.api === api) agents.delete(id);
+}
 
 function cachedStore(): Store | null {
   try {
@@ -57,25 +74,49 @@ export function interceptClose(store: Store) {
   };
   const fromNode = (node: any) => {
     const closeButton = node?.closest?.('[data-testid^="workspace-agent-close-"]');
-    if (closeButton) return locate(`agent_${closeButton.getAttribute("data-testid").slice("workspace-agent-close-".length)}`);
+    if (closeButton) {
+      const siblingTab = closeButton.parentElement?.querySelector(TAB) ?? closeButton.parentElement?.parentElement?.querySelector(TAB);
+      if (siblingTab) return locate(siblingTab.getAttribute("data-testid").slice("workspace-tab-".length));
+      return locate(`agent_${closeButton.getAttribute("data-testid").slice("workspace-agent-close-".length)}`);
+    }
     const button = node?.closest?.(TAB);
     return button ? locate(button.getAttribute("data-testid").slice("workspace-tab-".length)) : null;
   };
   const stop = (event: any) => { event.preventDefault(); event.stopImmediatePropagation(); };
-  const close = (key: string, tabs: CloseTab[]) => {
+  const close = async (key: string, tabs: CloseTab[]) => {
     for (const tab of tabs) {
-      const state = store.getState();
-      state.hideAgent(key, tab.target.agentId);
-      state.closeTab(key, tab.tabId);
+      const id = tab.target.agentId;
+      if (!id) continue;
+      const entry = window.__paseoTabsClose?.agents.get(id);
+      const api = entry?.workspaceId === key.slice(key.indexOf(":") + 1) ? entry.api : undefined;
+      const policy = installClosePolicy();
+      const choice = await policy?.choose({ workspaceKey: key, tabId: tab.tabId, agentId: id,
+        title: document.querySelector(`[data-testid="workspace-tab-${tab.tabId}"]`)?.getAttribute("aria-label") });
+      if (choice === "archive") {
+        try { await api?.agents.ref(id).archive(); }
+        catch (error) { console.warn("[paseo-tabs] Explicit archive failed", error); }
+      } else if (choice === "close" && locate(tab.tabId)?.key === key) {
+        policy?.close({ workspaceKey: key, tabId: tab.tabId, agentId: id });
+      } else return;
     }
   };
   const click = (event: any) => {
+    if (window.__paseoNativeTabCloseVersion) return;
+    const cross = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
+    if (cross) {
+      stop(event);
+      try {
+        const found = fromNode(event.target);
+        if (event.type === "click" && found?.tab.target.kind === "agent") void close(found.key, [found.tab]);
+      } catch (error) { console.warn("[paseo-tabs] Cannot resolve close target; action cancelled", error); }
+      return;
+    }
     const found = fromNode(event.target);
     if (found?.tab.target.kind === "agent") {
       const button = event.target.closest?.('[data-testid^="workspace-agent-close-"]');
       if (event.button === 1 || button) {
         stop(event);
-        if (event.type === "click" || event.type === "auxclick") close(found.key, [found.tab]);
+        if (event.type === "click" || event.type === "auxclick") void close(found.key, [found.tab]);
         return;
       }
     }
@@ -88,7 +129,7 @@ export function interceptClose(store: Store) {
     const selection = closeSelection(foundContext.pane.tabs, context.tabId, text);
     if (!selection || !selection.some(tab => tab.target.kind === "agent")) { context = null; return; }
     stop(event);
-    close(context.key, selection.filter(t => t.target.kind === "agent"));
+    void close(context.key, selection.filter(t => t.target.kind === "agent"));
     context = null;
     document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     for (const tab of selection.filter(t => t.target.kind !== "agent")) {
@@ -101,13 +142,14 @@ export function interceptClose(store: Store) {
     context = found ? { key: found.key, tabId: found.tab.tabId } : null;
   };
   const closeCurrent = () => {
-    if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return false;
+    if (window.__paseoNativeTabCloseVersion) return false;
+    if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return true;
     const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
     const workspace = route ? entries().find(([key]) => key === `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`) : null;
     const pane = workspace ? panes(workspace[1].root).find(p => p.id === workspace[1].focusedPaneId) : null;
     const found = pane ? locate(pane.focusedTabId) : fromNode(document.querySelector(`${TAB}[aria-selected="true"]`));
     if (!found || found.tab.target.kind !== "agent") return false;
-    close(found.key, [found.tab]);
+    void close(found.key, [found.tab]);
     return true;
   };
   const key = (event: any) => {
@@ -160,101 +202,68 @@ function startClose(): () => void {
   const install = (store: Store | null) => {
     if (disposed) return;
     if (store) {
-      const stopPersistence = persistHidden(store);
-      for (const [key, layout] of Object.entries(store.getState().layoutByWorkspace) as [string, any][]) {
-        for (const pane of panes(layout.root)) for (const tab of pane.tabs)
-          if (tab.target.kind === "agent" && window.__paseoTabsClose.pending?.has(tab.target.agentId)) {
-            store.getState().hideAgent(key, tab.target.agentId);
-            store.getState().closeTab(key, tab.tabId);
-          }
-      }
-      window.__paseoTabsClose.pending?.clear();
+      installClosePolicy()?.attachStore(store);
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.3.2");
-      release = () => { events.dispose(); stopPersistence(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.0");
+      release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
       window.__paseoTabsClose.unavailable = true;
-      window.__paseoTabsClose.closeCurrent = () => false;
-      console.warn("[paseo-tabs] Layout store unavailable; native tab closing retained");
+      window.__paseoTabsClose.closeCurrent = () => true;
+      console.warn("[paseo-tabs] Layout store unavailable; close actions blocked");
     }
     connectDispatcher();
   };
   const cached = cachedStore();
   if (cached) install(cached);
-  else void discoverLayoutStore().then(install).catch(error => console.warn("[paseo-tabs] Layout discovery failed", error));
+  else void discoverLayoutStore().then(install).catch(error => { install(null); console.warn("[paseo-tabs] Layout discovery failed; close actions blocked", error); });
   const timer = window.setInterval(connectDispatcher, 100);
   connectDispatcher();
   return () => { disposed = true; window.clearInterval(timer); release?.(); };
 }
 
-function persistHidden(store: Store): () => void {
-  const storageKey = "paseo-tabs.hidden-agents.v1";
-  const save = (state: any) => {
-    try {
-      const records = Object.fromEntries(Object.entries(state.hiddenAgentIdsByWorkspace).map(([key, ids]) => [key, [...(ids as Set<string>)]]));
-      window.localStorage.setItem(storageKey, JSON.stringify(records));
-    } catch (error) { console.warn("[paseo-tabs] Cannot persist hidden tabs", error); }
-  };
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(storageKey) || "{}");
-    for (const [key, ids] of Object.entries(saved)) {
-      if (!Array.isArray(ids)) continue;
-      for (const id of ids) {
-        if (typeof id !== "string") continue;
-        const state = store.getState();
-        state.hideAgent(key, id);
-        for (const pane of panes(state.layoutByWorkspace[key]?.root))
-          for (const tab of pane.tabs) if (tab.target.kind === "agent" && tab.target.agentId === id) state.closeTab(key, tab.tabId);
-      }
-    }
-  } catch (error) { console.warn("[paseo-tabs] Cannot restore hidden tabs", error); }
-  let previous = store.getState().hiddenAgentIdsByWorkspace;
-  return store.subscribe(state => {
-    if (state.hiddenAgentIdsByWorkspace === previous) return;
-    previous = state.hiddenAgentIdsByWorkspace;
-    save(state);
-  });
-}
-
-export function mountClose(): () => void {
-  const version = "0.3.2";
+export function mountClose(api?: any): () => void {
+  if (typeof window === "undefined" || typeof document === "undefined") return () => {};
+  installClosePolicy();
+  const version = "0.4.0";
   let state = window.__paseoTabsClose;
   if (!state || state.version !== version) {
     state?.dispose();
-    state = { version, count: 0 };
+    state = { version, count: 0, apis: new Set(), agents: new Map() };
     window.__paseoTabsClose = state;
-    state.pending = new Set<string>();
     state.closeCurrent = () => {
-      const tab = document.querySelector(`${TAB}[aria-selected="true"]`);
-      const id = tab?.getAttribute("data-testid")?.match(/^workspace-tab-agent_(.+)$/)?.[1];
-      if (!id) return false;
-      state.pending.add(id);
+      if (window.__paseoNativeTabCloseVersion) return false;
       return true;
     };
     const earlyClick = (event: any) => {
-      if (state.unavailable || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
+      if (window.__paseoNativeTabCloseVersion || document.documentElement.hasAttribute("data-paseo-tabs-close")) return;
       const button = event.target?.closest?.('[data-testid^="workspace-agent-close-"]');
       if (!button) return;
       event.preventDefault(); event.stopImmediatePropagation();
-      state.pending.add(button.getAttribute("data-testid").slice("workspace-agent-close-".length));
+      if (event.type !== "click") return;
+      const route = window.location.pathname.match(/\/h\/([^/]+)\/workspace\/([^/]+)/);
+      if (!route) return;
+      const id = button.getAttribute("data-testid").slice("workspace-agent-close-".length);
+      void installClosePolicy()?.choose({ workspaceKey: `${decodeURIComponent(route[1])}:${decodeURIComponent(route[2])}`, tabId: `agent_${id}`, agentId: id });
     };
-    window.addEventListener("click", earlyClick, true);
+    for (const type of ["pointerdown", "mousedown", "click", "auxclick"]) window.addEventListener(type, earlyClick, true);
     const stop = startClose();
     state.dispose = () => {
       state.stopKeyboard?.();
       document.documentElement.removeAttribute("data-paseo-tabs-keyboard");
-      window.removeEventListener("click", earlyClick, true);
+      for (const type of ["pointerdown", "mousedown", "click", "auxclick"]) window.removeEventListener(type, earlyClick, true);
       stop();
     };
   }
+  if (api) state.apis.add(api);
   state.count++;
   let released = false;
   return () => {
     if (released) return;
     released = true;
+    if (api) { state.apis.delete(api); installClosePolicy()?.cancel(); }
     if (--state.count > 0) return;
     // Keep the window guard across plugin reload and host reconnection.
     // Replacement by a newer guard disposes this instance atomically.

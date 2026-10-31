@@ -1,0 +1,14 @@
+{
+  "scope": "disposable fixtures only",
+  "mainDesktopVersion": "0.14.0",
+  "mainDaemonVersion": "0.13.2",
+  "mainPluginVersionAtStart": "0.3.2",
+  "mainDeploymentPerformed": false,
+  "mainOriginalSha256": "e34d305be181eda51066d03f7d1516b4603cc4661643e1ca3d818f2bba3e7363",
+  "fixturePatchedSha256": "8408efbadbedc495b412ad1f2bb61d310d29878e7958f2792b79de705e379647",
+  "fixtureIndexSha256": "7ce1fe368c8b087ee64b9e609ef6cf36fc5037b31cb2607e4268b902fa107d83",
+  "fixtureCacheKey": "0.4.0-8408efbadbedc495",
+  "nativeRuntimeFromCombined": "0.4.0",
+  "pluginRuntimeFromCombined": "0.4.0",
+  "fixtureDaemonFromCombined": "0.14.0"
+}
