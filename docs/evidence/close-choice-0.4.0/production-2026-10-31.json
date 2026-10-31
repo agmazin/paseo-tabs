@@ -1,0 +1,54 @@
+{
+  "checkedAtUtc": "2026-10-31T09:22:39.925157+00:00",
+  "production": {
+    "daemonVersion": "0.13.2",
+    "daemonPid": 2375,
+    "workerPid": 2377,
+    "listen": "127.0.0.1:6767",
+    "desktopManaged": true,
+    "pluginVersion": "0.4.0",
+    "pluginStatus": "running",
+    "pluginCommit": "630f26ea7f70769f09001b331ccd00d0b6b70e9b",
+    "bundleSha256": "8408efbadbedc495b412ad1f2bb61d310d29878e7958f2792b79de705e379647",
+    "indexSha256": "7ce1fe368c8b087ee64b9e609ef6cf36fc5037b31cb2607e4268b902fa107d83",
+    "matchesDeploymentRecord": true,
+    "originalBundleBackupSha256": "e34d305be181eda51066d03f7d1516b4603cc4661643e1ca3d818f2bba3e7363",
+    "originalIndexBackupSha256": "e43e6f3cb52d9affede68829baf465cc25d36692e720aa0ee57858637780316f",
+    "cacheKey": "0.4.0-8408efbadbedc495"
+  },
+  "currentRenderer": {
+    "mainPid": 71716,
+    "rendererPid": 72103,
+    "marker04Confirmed": false,
+    "status": "unconfirmed",
+    "safeEvaluationAvailable": false,
+    "reason": "No existing CDP/Inspector endpoint; packaged automation IPC only targets registered resident browser webviews, not the main app renderer.",
+    "uiReloadPerformed": false,
+    "debuggingEnabled": false,
+    "focusOrWindowManipulationPerformed": false,
+    "productionFixtureActionPerformed": false,
+    "draftAndTabPersistenceProvenForCurrentWindow": false
+  },
+  "visualVerification": {
+    "scope": "existing hidden Electron combined fixture run, not the production renderer",
+    "screenshotPath": "/Users/agmazin/Library/Developer/paseo-tabs/explicit-close-choice/docs/evidence/close-choice-0.4.0/combined/mandatory-choice.png",
+    "sha256": "e220bbf428f1d6613cc5c4676c6f9112de848550078e0e7df99ac4dc18ef0b5c",
+    "imageViewed": true,
+    "visibleButtons": [
+      "Закрыть вкладку",
+      "В архив",
+      "Отмена"
+    ],
+    "result": "Readable text, all three actions visible, no clipped content."
+  },
+  "cleanup": {
+    "fixtureHome": "/Users/agmazin/Library/Developer/paseo-tabs/explicit-close-fixtures/home",
+    "fixtureDaemonPid": 68650,
+    "fixtureWorkerPid": 68652,
+    "daemonStoppedGracefully": true,
+    "port6812Listening": false,
+    "testProcessesRemaining": false,
+    "mainDaemonUntouched": true
+  },
+  "earlyFallback": "Before layout discovery, the chooser result is intentionally ignored; this is a safe refusal, not working close/archive actions and not a queued action."
+}
