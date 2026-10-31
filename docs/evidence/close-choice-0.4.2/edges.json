@@ -1,0 +1,9 @@
+{
+  "client": "0.14.0 original",
+  "plugin": "0.4.2",
+  "daemon": "0.14.0",
+  "checks": [
+    "unavailable discovery: synchronous guard, unknown status blocks without prompt, no deferred close or archive",
+    "delayed discovery: synchronous guard, unknown status blocks without prompt, no deferred close or archive"
+  ]
+}

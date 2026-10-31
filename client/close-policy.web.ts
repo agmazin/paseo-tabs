@@ -6,7 +6,7 @@ declare const document: any;
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
 export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {
@@ -36,6 +36,7 @@ export function installClosePolicy() {
     pending = true;
     const signature = focus();
     let overlay: any;
+    let root: any;
     let timer: any;
     let key: any;
     let observer: any;
@@ -43,65 +44,102 @@ export function installClosePolicy() {
     try {
       return await new Promise<Choice>(resolve => {
         let settled = false;
+        let actionable = () => false;
         const finish = (choice: Choice) => {
           if (settled) return;
           settled = true;
-          resolve(choice !== "cancel" && (focus() !== signature || !contains(request) || request.isCurrent?.() === false) ? "cancel" : choice);
+          resolve(choice !== "cancel" && (!actionable() || focus() !== signature || !contains(request) || request.isCurrent?.() === false) ? "cancel" : choice);
         };
         cancelPending = () => finish("cancel");
         overlay = document.createElement("div");
-        overlay.dataset.testid = "paseo-tab-close-dialog";
-        overlay.setAttribute("role", "dialog");
-        overlay.setAttribute("aria-modal", "true");
-        overlay.setAttribute("aria-labelledby", "paseo-tab-close-title");
-        overlay.style.cssText = "box-sizing:border-box;position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:20px;color:var(--foreground,#eee);font:14px system-ui;-webkit-app-region:no-drag";
-        const panel = document.createElement("div");
-        panel.style.cssText = "box-sizing:border-box;position:relative;width:420px;max-width:100%;background:#202421;border:1px solid #4b524c;border-radius:14px;padding:24px;box-shadow:0 16px 60px #0008";
-        const heading = document.createElement("h2");
-        heading.id = "paseo-tab-close-title";
-        heading.textContent = "Закрыть вкладку?";
-        heading.style.cssText = "font-size:18px;margin:0 32px 12px 0";
-        const title = document.createElement("p");
-        title.textContent = request.title || "Чат";
-        title.style.cssText = "overflow-wrap:anywhere;margin:0 0 12px";
-        const explanation = document.createElement("p");
-        explanation.textContent = "После закрытия вкладки чат останется в Диалогах. Архивирование остановит чат и уберёт его в архив.";
-        explanation.style.cssText = "color:#b6bdb7;line-height:1.5;margin:0 0 20px";
-        const actions = document.createElement("div");
-        actions.style.cssText = "display:flex;flex-wrap:wrap;gap:8px";
-        const buttons: any[] = [];
-        for (const [label, choice] of [["Отменить закрытие", "cancel"], ["Закрыть", "close"], ["Архивировать", "archive"]] as const) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.textContent = choice === "cancel" ? "×" : label;
-          button.setAttribute("aria-label", label);
-          button.dataset.testid = `paseo-tab-close-${choice}`;
-          button.style.cssText = "border:1px solid #69746a;border-radius:8px;background:#166534;color:#fff;padding:10px 12px;cursor:pointer;font:inherit";
-          if (choice === "archive") button.style.background = "#9a3412";
-          if (choice === "cancel") button.style.cssText = "position:absolute;top:12px;right:12px;width:36px;height:36px;border:1px solid transparent;border-radius:8px;background:transparent;color:#eee;font:26px system-ui;cursor:pointer";
-          button.addEventListener("focus", () => { button.style.outline = "2px solid #f8fafc"; button.style.outlineOffset = "3px"; });
-          button.addEventListener("blur", () => { button.style.outline = ""; button.style.outlineOffset = ""; });
-          button.addEventListener("click", () => finish(choice));
-          buttons.push(button);
-          (choice === "cancel" ? panel : actions).appendChild(button);
+        overlay.dataset.testid = "paseo-tab-close-root";
+        overlay.style.cssText = "position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none;-webkit-app-region:no-drag";
+        document.body.appendChild(overlay);
+        const ui = hostCloseUi();
+        const h = ui.React.createElement;
+        const focusStyle = document.createElement("style");
+        const updateFocusStyle = () => {
+          focusStyle.textContent = `[data-testid^="paseo-tab-close-"]:focus{outline:none!important}[data-testid^="paseo-tab-close-"]:focus-visible{outline:2px solid ${ui.runtime.getTheme().colors.ring}!important;outline-offset:1px}[data-testid="paseo-tab-close-cancel"][data-initial-focus="true"]:focus{outline:none!important}`;
+        };
+        function Content() {
+          const { theme } = ui.useUnistyles();
+          ui.React.useLayoutEffect(updateFocusStyle, [theme.colors.ring]);
+          return h(ui.View, { style: { gap: theme.spacing[4] } },
+            h(ui.Text, { style: { color: theme.colors.foreground, fontSize: theme.fontSize.base } }, request.title || "Чат"),
+            h(ui.Text, { style: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.base, lineHeight: 22 } },
+              "После закрытия вкладки чат останется в Диалогах. Архивирование остановит чат и уберёт его в архив."),
+            h(ui.View, { style: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[2], alignItems: "center" } },
+              h(ui.Button, { testID: "paseo-tab-close-close", variant: "default", size: "sm", style: { flex: 1 }, onPress: () => finish("close") }, "Закрыть"),
+              h(ui.Button, { testID: "paseo-tab-close-archive", size: "sm", style: { flex: 1, backgroundColor: "#f97316", borderColor: "#f97316" },
+                textStyle: { color: "#18181b" }, onPress: () => finish("archive") }, "Архивировать")));
         }
-        panel.append(heading, title, explanation, actions);
-        overlay.appendChild(panel);
+        function Dialog() {
+          return h(ui.SafeAreaProvider, { initialMetrics: { frame: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, insets: { top: 0, right: 0, bottom: 0, left: 0 } } },
+            h(ui.GestureHandlerRootView, { style: { flex: 1 } }, h(ui.BottomSheetModalProvider, null,
+              h(ui.AdaptiveModalSheet, { visible: true, onClose: () => finish("cancel"), header: { title: "Закрыть вкладку?" },
+                testID: "paseo-tab-close-surface" }, h(Content)))));
+        }
+        root = ui.createRoot(overlay);
+        ui.flushSync(() => root.render(h(Dialog)));
+        overlay.appendChild(focusStyle);
+        let buttons: any[] = [];
+        let firstFocus = true;
+        let missingSince = Date.now();
+        const visibleButton = (button: any) => {
+          if (!button?.isConnected) return false;
+          const bounds = button.getBoundingClientRect();
+          if (bounds.width <= 0 || bounds.height <= 0) return false;
+          const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+          if (!hit || !button.contains(hit)) return false;
+          for (let node = button; node; node = node.parentElement) {
+            const style = window.getComputedStyle(node);
+            if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+          }
+          return true;
+        };
+        const syncControls = () => {
+          const surface = document.querySelector('[data-testid="paseo-tab-close-surface"], [data-testid="paseo-tab-close-dialog"]');
+          const next = [
+            surface?.querySelector('[data-testid="paseo-tab-close-cancel"], [role="button"][aria-label="Close"], [role="button"][aria-label="Закрыть"]'),
+            document.querySelector('[data-testid="paseo-tab-close-close"]'),
+            document.querySelector('[data-testid="paseo-tab-close-archive"]'),
+          ];
+          if (next.some(button => !visibleButton(button))) {
+            buttons = [];
+            if (Date.now() - missingSince > 2000) finish("cancel");
+            return;
+          }
+          missingSince = Date.now();
+          buttons = next;
+          actionable = () => buttons.length === 3 && buttons.every(visibleButton);
+          const dialog = surface.querySelector('[role="dialog"]') ?? surface.parentElement;
+          dialog.setAttribute("role", "dialog");
+          dialog.setAttribute("aria-modal", "true");
+          dialog.setAttribute("aria-label", "Закрыть вкладку?");
+          surface.dataset.testid = "paseo-tab-close-dialog";
+          buttons[0].dataset.testid = "paseo-tab-close-cancel";
+          buttons[0].setAttribute("aria-label", "Отменить закрытие");
+          buttons[0].style.marginRight = `${-parseFloat(window.getComputedStyle(buttons[0]).paddingRight)}px`;
+          buttons[0].onblur = () => delete buttons[0]?.dataset.initialFocus;
+          if (firstFocus) { buttons[0].dataset.initialFocus = "true"; buttons[0].focus({ preventScroll: true }); firstFocus = false; }
+        };
         key = (event: any) => {
           if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); finish("cancel"); }
           if (event.key === "Tab") {
+            for (const button of buttons) delete button.dataset.initialFocus;
             event.preventDefault(); event.stopImmediatePropagation();
+            syncControls();
+            if (!buttons.length) return;
             const index = buttons.indexOf(document.activeElement);
             buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
           }
         };
         window.addEventListener("keydown", key, true);
-        document.body.appendChild(overlay);
-        const style = window.getComputedStyle(overlay);
-        const bounds = overlay.getBoundingClientRect();
-        if (!overlay.isConnected || style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || bounds.width <= 0 || bounds.height <= 0) { finish("cancel"); return; }
-        buttons[0].focus();
-        timer = window.setInterval(() => { if (focus() !== signature || !contains(request) || request.isCurrent?.() === false || !overlay.isConnected) finish("cancel"); }, 40);
+        syncControls();
+        timer = window.setInterval(() => {
+          if (focus() !== signature || !contains(request) || request.isCurrent?.() === false || !overlay.isConnected) { finish("cancel"); return; }
+          syncControls();
+        }, 40);
         observer = new window.MutationObserver(() => { if (!overlay.isConnected) finish("cancel"); });
         observer.observe(document.body, { childList: true });
       });
@@ -112,6 +150,7 @@ export function installClosePolicy() {
       window.clearInterval(timer);
       observer?.disconnect();
       window.removeEventListener("keydown", key, true);
+      root?.unmount();
       overlay?.remove();
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
       cancelPending = undefined;
@@ -168,4 +207,26 @@ export function installClosePolicy() {
 function allPanes(root: any): any[] {
   if (!root) return [];
   return root.kind === "pane" ? [root.pane] : (root.group?.children ?? []).flatMap(allPanes);
+}
+
+// Metro exports of the exact Paseo 0.14.0 client supported by the native patch.
+// The host owns the modal, header, close icon, compact sheet, buttons and theme.
+function hostCloseUi() {
+  const load = window.__r;
+  if (typeof load !== "function") throw new Error("Paseo UI modules unavailable");
+  const React = load(35);
+  const { createRoot } = load(87);
+  const { flushSync } = load(90);
+  const { AdaptiveModalSheet } = load(3675);
+  const { Button } = load(3351);
+  const { useUnistyles, UnistylesRuntime: runtime } = load(160);
+  const { SafeAreaProvider } = load(480);
+  const { GestureHandlerRootView } = load(3679);
+  const { BottomSheetModalProvider } = load(3676);
+  const View = load(187).default;
+  const Text = load(275).default;
+  if (![React.createElement, createRoot, flushSync, AdaptiveModalSheet, Button, useUnistyles].every(value => typeof value === "function") ||
+    !SafeAreaProvider || !GestureHandlerRootView || !BottomSheetModalProvider || !View || !Text)
+    throw new Error("Unsupported Paseo UI module contract");
+  return { React, createRoot, flushSync, AdaptiveModalSheet, Button, useUnistyles, runtime, SafeAreaProvider, GestureHandlerRootView, BottomSheetModalProvider, View, Text };
 }
