@@ -6,7 +6,7 @@ declare const document: any;
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
 export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
-const VERSION = "0.4.4";
+const VERSION = "0.4.5";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {
@@ -32,7 +32,10 @@ export function installClosePolicy() {
   const contains = (request: CloseRequest) => !store || [...allTabs(store.getState().layoutByWorkspace[request.workspaceKey]?.root), ...(store.getState().sheetsByWorkspace?.[request.workspaceKey] ?? []).map((sheet: any) => sheet.tab)]
     .some(tab => tab.tabId === request.tabId && tab.target.agentId === request.agentId);
   const choose = async (request: CloseRequest): Promise<Choice> => {
-    if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request) || request.isCurrent?.() === false) return "cancel";
+    if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request) || request.isCurrent?.() === false) {
+      console.warn("[paseo-tabs] close cancelled before dialog", { pending, contains: contains(request), current: request.isCurrent?.(), request: { key: request.workspaceKey, tab: request.tabId } });
+      return "cancel";
+    }
     // Another Paseo build has no known modal: the tab closes as before the choice existed, the chat stays in Dialogs.
     let ui: ReturnType<typeof hostCloseUi>;
     try {
@@ -53,8 +56,9 @@ export function installClosePolicy() {
       return await new Promise<Choice>(resolve => {
         let settled = false;
         let actionable = () => false;
-        const finish = (choice: Choice) => {
+        const finish = (choice: Choice, why = "") => {
           if (settled) return;
+          if (choice === "cancel" && why) console.warn(`[paseo-tabs] close dialog cancelled: ${why}`);
           settled = true;
           resolve(choice !== "cancel" && (!actionable() || focus() !== signature || !contains(request) || request.isCurrent?.() === false) ? "cancel" : choice);
         };
@@ -113,7 +117,13 @@ export function installClosePolicy() {
           ];
           if (next.some(button => !visibleButton(button))) {
             buttons = [];
-            if (Date.now() - missingSince > 2000) finish("cancel");
+            if (Date.now() - missingSince > 2000)
+              finish("cancel", `controls not visible ${JSON.stringify(next.map(button => {
+                if (!button) return "missing";
+                const r = button.getBoundingClientRect();
+                const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+                return { w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.x), y: Math.round(r.y), hit: hit ? `${hit.tagName}.${hit.getAttribute?.("data-testid") ?? ""}` : null };
+              }))} window ${window.innerWidth}x${window.innerHeight}`);
             return;
           }
           missingSince = Date.now();
@@ -144,10 +154,13 @@ export function installClosePolicy() {
         window.addEventListener("keydown", key, true);
         syncControls();
         timer = window.setInterval(() => {
-          if (focus() !== signature || !contains(request) || request.isCurrent?.() === false || !overlay.isConnected) { finish("cancel"); return; }
+          if (focus() !== signature || !contains(request) || request.isCurrent?.() === false || !overlay.isConnected) {
+            finish("cancel", `context changed focus=${focus() === signature} contains=${contains(request)} current=${request.isCurrent?.()} overlay=${overlay.isConnected}`);
+            return;
+          }
           syncControls();
         }, 40);
-        observer = new window.MutationObserver(() => { if (!overlay.isConnected) finish("cancel"); });
+        observer = new window.MutationObserver(() => { if (!overlay.isConnected) finish("cancel", "overlay removed"); });
         observer.observe(document.body, { childList: true });
       });
     } catch (error) {

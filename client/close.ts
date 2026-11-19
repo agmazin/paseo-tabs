@@ -81,7 +81,7 @@ export async function closeAgentTab(api: any, request: CloseRequest, policy = in
   });
   try {
     await handle.refresh();
-    if (!matches()) return false;
+    if (!matches()) { console.warn("[paseo-tabs] close: tab and agent workspace differ", { key: request.workspaceKey, agent: handle.current()?.workspaceId }); return false; }
     if (handle.current().archivedAt) { policy.close(request); return true; }
     if (invalidated) return false;
     const choice = await policy.choose({ ...request, isCurrent: active });
@@ -138,6 +138,7 @@ export function interceptClose(store: Store) {
       try {
         const found = fromNode(event.target);
         if (event.type === "click" && found?.tab.target.kind === "agent") void close(found.key, [found.tab]);
+        else if (event.type === "click") console.warn("[paseo-tabs] close: tab not found in layout", cross.getAttribute("data-testid"), found?.tab.target.kind);
       } catch (error) { console.warn("[paseo-tabs] Cannot resolve close target; action cancelled", error); }
       return;
     }
@@ -236,7 +237,8 @@ function startClose(): () => void {
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.2");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.5");
+      console.warn("[paseo-tabs] close ready 0.4.5");
       release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
