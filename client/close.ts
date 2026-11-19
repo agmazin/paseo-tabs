@@ -130,12 +130,25 @@ export function interceptClose(store: Store) {
     }
     return null;
   };
+  // Some tabs carry their own id in the layout, not "agent_<id>": find them by the agent, the open workspace first.
+  const locateAgent = (agentId: string) => {
+    const route = window.location.pathname.match(/\/workspace\/([^/]+)/)?.[1];
+    const all = entries().sort(([a], [b]) => Number(!!route && b.endsWith(`:${route}`)) - Number(!!route && a.endsWith(`:${route}`)));
+    for (const [key, layout] of all) {
+      for (const pane of panes(layout.root)) {
+        const tab = pane.tabs.find((t: CloseTab) => t.target?.kind === "agent" && t.target.agentId === agentId);
+        if (tab) return { key, pane, tab: tab as CloseTab };
+      }
+    }
+    return null;
+  };
   const fromNode = (node: any) => {
     const closeButton = node?.closest?.('[data-testid^="workspace-agent-close-"]');
     if (closeButton) {
+      const agentId = closeButton.getAttribute("data-testid").slice("workspace-agent-close-".length);
       const siblingTab = closeButton.parentElement?.querySelector(TAB) ?? closeButton.parentElement?.parentElement?.querySelector(TAB);
-      if (siblingTab) return locate(siblingTab.getAttribute("data-testid").slice("workspace-tab-".length));
-      return locate(`agent_${closeButton.getAttribute("data-testid").slice("workspace-agent-close-".length)}`);
+      const byTab = siblingTab ? locate(siblingTab.getAttribute("data-testid").slice("workspace-tab-".length)) : null;
+      return byTab ?? locate(`agent_${agentId}`) ?? locateAgent(agentId);
     }
     const button = node?.closest?.(TAB);
     return button ? locate(button.getAttribute("data-testid").slice("workspace-tab-".length)) : null;
@@ -162,7 +175,10 @@ export function interceptClose(store: Store) {
         const found = fromNode(event.target);
         if (event.type === "click" && found?.tab.target.kind === "agent") void close(found.key, [found.tab]);
         else if (event.type === "click") {
-          console.warn("[paseo-tabs] close: tab not found in layout, looking for the store again", cross.getAttribute("data-testid"), found?.tab.target.kind);
+          const route = window.location.pathname.match(/\/workspace\/([^/]+)/)?.[1];
+          const here = entries().filter(([key]) => !route || key.endsWith(`:${route}`)).map(([key, layout]) => [key, panes(layout.root).map((pane: any) => pane.tabs.map((t: any) => `${t.tabId}>${t.target?.kind}:${t.target?.agentId ?? ""}`))]);
+          console.warn("[paseo-tabs] close: tab not found in layout, looking for the store again", cross.getAttribute("data-testid"), found?.tab.target.kind,
+            "sibling", cross.parentElement?.querySelector(TAB)?.getAttribute("data-testid"), "layout", JSON.stringify(here).slice(0, 1500));
           window.__paseoTabsClose.rediscover?.(cross.getAttribute("data-testid"));
         }
       } catch (error) { console.warn("[paseo-tabs] Cannot resolve close target; action cancelled", error); }
@@ -263,8 +279,8 @@ function startClose(): () => void {
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.7");
-      console.warn("[paseo-tabs] close ready 0.4.7");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.8");
+      console.warn("[paseo-tabs] close ready 0.4.8");
       release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
