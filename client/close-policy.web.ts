@@ -6,7 +6,7 @@ declare const document: any;
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
 export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
-const VERSION = "0.4.2";
+const VERSION = "0.4.3";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {
@@ -33,6 +33,14 @@ export function installClosePolicy() {
     .some(tab => tab.tabId === request.tabId && tab.target.agentId === request.agentId);
   const choose = async (request: CloseRequest): Promise<Choice> => {
     if (pending || !request.workspaceKey || !request.tabId || !request.agentId || !contains(request) || request.isCurrent?.() === false) return "cancel";
+    // Another Paseo build has no known modal: the tab closes as before the choice existed, the chat stays in Dialogs.
+    let ui: ReturnType<typeof hostCloseUi>;
+    try {
+      ui = hostCloseUi();
+    } catch (error) {
+      console.warn("[paseo-tabs] Close choice unavailable on this Paseo build; closing without archive", error);
+      return "close";
+    }
     pending = true;
     const signature = focus();
     let overlay: any;
@@ -55,7 +63,6 @@ export function installClosePolicy() {
         overlay.dataset.testid = "paseo-tab-close-root";
         overlay.style.cssText = "position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none;-webkit-app-region:no-drag";
         document.body.appendChild(overlay);
-        const ui = hostCloseUi();
         const h = ui.React.createElement;
         const focusStyle = document.createElement("style");
         const updateFocusStyle = () => {
@@ -214,7 +221,7 @@ function allPanes(root: any): any[] {
 function hostCloseUi() {
   const bundle = "/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js";
   if (!Array.from(document.scripts ?? []).some((script: any) => script.src?.split(/[?#]/)[0].endsWith(bundle)))
-    throw new Error("Unsupported Paseo desktop UI build; action cancelled");
+    throw new Error("Unsupported Paseo desktop UI build");
   const load = window.__r;
   if (typeof load !== "function") throw new Error("Paseo UI modules unavailable");
   const React = load(35);
