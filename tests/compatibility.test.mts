@@ -9,11 +9,11 @@ const manifest = JSON.parse(readFileSync(new URL("../paseo-plugin.json", import.
 
 test("manifest admits daemon and Android app 0.13.2 independently of desktop build", () => {
   for (const runtime of ["daemon", "app"] as const) {
-    for (const version of ["0.12.0", "0.13.2", "0.14.0"]) {
+    for (const version of ["0.12.0", "0.13.2", "0.14.0", "0.16.2"]) {
       assert.doesNotThrow(() => assertPluginCompatibility({ ...manifest, version, runtime }));
     }
     assert.throws(() => assertPluginCompatibility({ ...manifest, requirements: { paseo: ">=0.14.0 <0.14.1" }, version: "0.13.2", runtime }));
-    assert.throws(() => assertPluginCompatibility({ ...manifest, version: "0.15.0", runtime }));
+    assert.throws(() => assertPluginCompatibility({ ...manifest, version: "0.17.0", runtime }));
   }
 });
 
