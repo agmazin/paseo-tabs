@@ -6,7 +6,7 @@ declare const document: any;
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
 export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
-const VERSION = "0.4.5";
+const VERSION = "0.4.6";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {
@@ -37,12 +37,11 @@ export function installClosePolicy() {
       return "cancel";
     }
     // Another Paseo build has no known modal: the tab closes as before the choice existed, the chat stays in Dialogs.
-    let ui: ReturnType<typeof hostCloseUi>;
+    let ui: ReturnType<typeof hostCloseUi> | null = null;
     try {
       ui = hostCloseUi();
     } catch (error) {
-      console.warn("[paseo-tabs] Close choice unavailable on this Paseo build; closing without archive", error);
-      return "close";
+      console.warn("[paseo-tabs] Host close dialog unavailable on this Paseo build; own dialog", error);
     }
     pending = true;
     const signature = focus();
@@ -67,31 +66,77 @@ export function installClosePolicy() {
         overlay.dataset.testid = "paseo-tab-close-root";
         overlay.style.cssText = "position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none;-webkit-app-region:no-drag";
         document.body.appendChild(overlay);
-        const h = ui.React.createElement;
+        let fallback = false;
         const focusStyle = document.createElement("style");
-        const updateFocusStyle = () => {
-          focusStyle.textContent = `[data-testid^="paseo-tab-close-"]:focus{outline:none!important}[data-testid^="paseo-tab-close-"]:focus-visible{outline:2px solid ${ui.runtime.getTheme().colors.ring}!important;outline-offset:1px}[data-testid="paseo-tab-close-cancel"][data-initial-focus="true"]:focus{outline:none!important}`;
+        focusStyle.textContent = '[data-testid^="paseo-tab-close-"]:focus{outline:none!important}[data-testid^="paseo-tab-close-"]:focus-visible{outline:2px solid #888!important;outline-offset:1px}';
+        // Own dialog: same title, text, buttons and test ids as the host one, so the checks below stay the same.
+        const showFallback = () => {
+          fallback = true;
+          try { root?.unmount(); } catch {}
+          root = undefined;
+          overlay.replaceChildren();
+          overlay.style.pointerEvents = "auto";
+          const colors = (() => { try { return ui?.runtime.getTheme().colors ?? {}; } catch { return {}; } })();
+          const bg = colors.surface1 ?? "#1f2121", fg = colors.foreground ?? "#e8e8e8", muted = colors.foregroundMuted ?? "#a3a3a3";
+          const line = colors.border ?? "rgba(255,255,255,0.08)", ok = colors.accent ?? "#2f7d4f";
+          const el = (tag: string, css: string, text?: string) => { const node = document.createElement(tag); node.style.cssText = css; if (text) node.textContent = text; return node; };
+          const shade = el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.45)");
+          shade.onclick = () => finish("cancel");
+          const panel = el("div", `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));background:${bg};border:1px solid ${line};border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:${fg};overflow:hidden`);
+          panel.dataset.testid = "paseo-tab-close-surface";
+          panel.dataset.own = "true";
+          panel.setAttribute("role", "dialog");
+          const head = el("div", `display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid ${line}`);
+          head.append(el("div", "font-size:15px;font-weight:500", "Закрыть вкладку?"));
+          const x = el("button", `all:unset;cursor:pointer;color:${muted};font-size:18px;line-height:1;padding:4px 6px;border-radius:6px`, "✕");
+          x.dataset.testid = "paseo-tab-close-cancel";
+          x.setAttribute("aria-label", "Отменить закрытие");
+          x.onclick = () => finish("cancel");
+          head.append(x);
+          const body = el("div", "padding:20px;display:flex;flex-direction:column;gap:16px");
+          body.append(el("div", "font-size:14px", request.title || "Чат"));
+          body.append(el("div", `font-size:14px;line-height:22px;color:${muted}`, "После закрытия вкладки чат останется в Диалогах. Архивирование остановит чат и уберёт его в архив."));
+          const row = el("div", "display:flex;gap:8px");
+          const button = (testid: string, label: string, css: string, choice: Choice) => {
+            const node = el("button", `all:unset;cursor:pointer;flex:1;text-align:center;font-size:13px;font-weight:500;padding:8px 12px;border-radius:8px;${css}`, label);
+            node.dataset.testid = testid;
+            node.onclick = () => finish(choice);
+            return node;
+          };
+          row.append(button("paseo-tab-close-close", "Закрыть", `background:${ok};color:${colors.accentForeground ?? "#fff"}`, "close"));
+          row.append(button("paseo-tab-close-archive", "Архивировать", "background:#f97316;color:#18181b", "archive"));
+          body.append(row);
+          panel.append(head, body);
+          overlay.append(shade, panel, focusStyle);
+          missingSince = Date.now();
         };
-        function Content() {
-          const { theme } = ui.useUnistyles();
-          ui.React.useLayoutEffect(updateFocusStyle, [theme.colors.ring]);
-          return h(ui.View, { style: { gap: theme.spacing[4] } },
-            h(ui.Text, { style: { color: theme.colors.foreground, fontSize: theme.fontSize.base } }, request.title || "Чат"),
-            h(ui.Text, { style: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.base, lineHeight: 22 } },
-              "После закрытия вкладки чат останется в Диалогах. Архивирование остановит чат и уберёт его в архив."),
-            h(ui.View, { style: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[2], alignItems: "center" } },
-              h(ui.Button, { testID: "paseo-tab-close-close", variant: "default", size: "sm", style: { flex: 1 }, onPress: () => finish("close") }, "Закрыть"),
-              h(ui.Button, { testID: "paseo-tab-close-archive", size: "sm", style: { flex: 1, backgroundColor: "#f97316", borderColor: "#f97316" },
-                textStyle: { color: "#18181b" }, onPress: () => finish("archive") }, "Архивировать")));
-        }
-        function Dialog() {
-          return h(ui.SafeAreaProvider, { initialMetrics: { frame: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, insets: { top: 0, right: 0, bottom: 0, left: 0 } } },
-            h(ui.GestureHandlerRootView, { style: { flex: 1 } }, h(ui.BottomSheetModalProvider, null,
-              h(ui.AdaptiveModalSheet, { visible: true, onClose: () => finish("cancel"), header: { title: "Закрыть вкладку?" },
-                testID: "paseo-tab-close-surface" }, h(Content)))));
-        }
-        root = ui.createRoot(overlay);
-        ui.flushSync(() => root.render(h(Dialog)));
+        if (ui) {
+          const host = ui;
+          const h = host.React.createElement;
+          const updateFocusStyle = () => {
+            focusStyle.textContent = `[data-testid^="paseo-tab-close-"]:focus{outline:none!important}[data-testid^="paseo-tab-close-"]:focus-visible{outline:2px solid ${host.runtime.getTheme().colors.ring}!important;outline-offset:1px}[data-testid="paseo-tab-close-cancel"][data-initial-focus="true"]:focus{outline:none!important}`;
+          };
+          function Content() {
+            const { theme } = host.useUnistyles();
+            host.React.useLayoutEffect(updateFocusStyle, [theme.colors.ring]);
+            return h(host.View, { style: { gap: theme.spacing[4] } },
+              h(host.Text, { style: { color: theme.colors.foreground, fontSize: theme.fontSize.base } }, request.title || "Чат"),
+              h(host.Text, { style: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.base, lineHeight: 22 } },
+                "После закрытия вкладки чат останется в Диалогах. Архивирование остановит чат и уберёт его в архив."),
+              h(host.View, { style: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[2], alignItems: "center" } },
+                h(host.Button, { testID: "paseo-tab-close-close", variant: "default", size: "sm", style: { flex: 1 }, onPress: () => finish("close") }, "Закрыть"),
+                h(host.Button, { testID: "paseo-tab-close-archive", size: "sm", style: { flex: 1, backgroundColor: "#f97316", borderColor: "#f97316" },
+                  textStyle: { color: "#18181b" }, onPress: () => finish("archive") }, "Архивировать")));
+          }
+          function Dialog() {
+            return h(host.SafeAreaProvider, { initialMetrics: { frame: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, insets: { top: 0, right: 0, bottom: 0, left: 0 } } },
+              h(host.GestureHandlerRootView, { style: { flex: 1 } }, h(host.BottomSheetModalProvider, null,
+                h(host.AdaptiveModalSheet, { visible: true, onClose: () => finish("cancel"), header: { title: "Закрыть вкладку?" },
+                  testID: "paseo-tab-close-surface" }, h(Content)))));
+          }
+          root = host.createRoot(overlay);
+          host.flushSync(() => root.render(h(Dialog)));
+        } else showFallback();
         overlay.appendChild(focusStyle);
         let buttons: any[] = [];
         let firstFocus = true;
@@ -117,6 +162,11 @@ export function installClosePolicy() {
           ];
           if (next.some(button => !visibleButton(button))) {
             buttons = [];
+            if (!fallback && Date.now() - missingSince > 1000) {
+              console.warn("[paseo-tabs] host close dialog not visible; own dialog", JSON.stringify(next.map(button => button ? Math.round(button.getBoundingClientRect().width) : "missing")));
+              showFallback();
+              return;
+            }
             if (Date.now() - missingSince > 2000)
               finish("cancel", `controls not visible ${JSON.stringify(next.map(button => {
                 if (!button) return "missing";

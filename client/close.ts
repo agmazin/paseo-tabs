@@ -237,8 +237,8 @@ function startClose(): () => void {
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.5");
-      console.warn("[paseo-tabs] close ready 0.4.5");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.6");
+      console.warn("[paseo-tabs] close ready 0.4.6");
       release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
