@@ -6,7 +6,7 @@ declare const document: any;
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
 export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
-const VERSION = "0.4.3";
+const VERSION = "0.4.4";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {
@@ -216,25 +216,34 @@ function allPanes(root: any): any[] {
   return root.kind === "pane" ? [root.pane] : (root.group?.children ?? []).flatMap(allPanes);
 }
 
-// Metro exports of the exact Paseo 0.14.0 client supported by the native patch.
+// Metro module ids of the exact desktop builds the close choice is verified on: 0.14.0 and 0.16.2.
 // The host owns the modal, header, close icon, compact sheet, buttons and theme.
+const BUILDS: Record<string, Record<"react" | "root" | "flush" | "sheet" | "button" | "uni" | "safe" | "gesture" | "bottom" | "view" | "text", number>> = {
+  "/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js": {
+    react: 35, root: 87, flush: 90, sheet: 3675, button: 3351, uni: 160, safe: 480, gesture: 3679, bottom: 3676, view: 187, text: 275,
+  },
+  "/_expo/static/js/web/index-0d8c444bf1d4a1ba16548f9ab36ae9d8.js": {
+    react: 36, root: 87, flush: 91, sheet: 3414, button: 3384, uni: 160, safe: 487, gesture: 3418, bottom: 3415, view: 187, text: 275,
+  },
+};
 function hostCloseUi() {
-  const bundle = "/_expo/static/js/web/index-4df2750168de94b9b8fdf3170859afa9.js";
-  if (!Array.from(document.scripts ?? []).some((script: any) => script.src?.split(/[?#]/)[0].endsWith(bundle)))
-    throw new Error("Unsupported Paseo desktop UI build");
+  const sources = Array.from(document.scripts ?? []).map((script: any) => String(script.src ?? "").split(/[?#]/)[0]);
+  const bundle = Object.keys(BUILDS).find(name => sources.some(src => src.endsWith(name)));
+  if (!bundle) throw new Error("Unsupported Paseo desktop UI build");
+  const ids = BUILDS[bundle];
   const load = window.__r;
   if (typeof load !== "function") throw new Error("Paseo UI modules unavailable");
-  const React = load(35);
-  const { createRoot } = load(87);
-  const { flushSync } = load(90);
-  const { AdaptiveModalSheet } = load(3675);
-  const { Button } = load(3351);
-  const { useUnistyles, UnistylesRuntime: runtime } = load(160);
-  const { SafeAreaProvider } = load(480);
-  const { GestureHandlerRootView } = load(3679);
-  const { BottomSheetModalProvider } = load(3676);
-  const View = load(187).default;
-  const Text = load(275).default;
+  const React = load(ids.react);
+  const { createRoot } = load(ids.root);
+  const { flushSync } = load(ids.flush);
+  const { AdaptiveModalSheet } = load(ids.sheet);
+  const { Button } = load(ids.button);
+  const { useUnistyles, UnistylesRuntime: runtime } = load(ids.uni);
+  const { SafeAreaProvider } = load(ids.safe);
+  const { GestureHandlerRootView } = load(ids.gesture);
+  const { BottomSheetModalProvider } = load(ids.bottom);
+  const View = load(ids.view).default;
+  const Text = load(ids.text).default;
   if (![React.createElement, createRoot, flushSync, AdaptiveModalSheet, Button, useUnistyles].every(value => typeof value === "function") ||
     !SafeAreaProvider || !GestureHandlerRootView || !BottomSheetModalProvider || !View || !Text)
     throw new Error("Unsupported Paseo UI module contract");
