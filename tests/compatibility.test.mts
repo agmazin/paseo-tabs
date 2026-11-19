@@ -34,6 +34,18 @@ test("unsupported desktop build is rejected before any numeric Metro lookup", ()
   }
 });
 
+test("exact 0.16.2 desktop entry resolves its own module ids", () => {
+  const component = () => {};
+  const modules: Record<number, any> = {
+    36: { createElement: component }, 87: { createRoot: component }, 91: { flushSync: component },
+    3414: { AdaptiveModalSheet: component }, 3384: { Button: component },
+    160: { useUnistyles: component, UnistylesRuntime: {} }, 487: { SafeAreaProvider: component },
+    3418: { GestureHandlerRootView: component }, 3415: { BottomSheetModalProvider: component },
+    187: { default: component }, 275: { default: component },
+  };
+  assert.equal(resolveUi("paseo://app/_expo/static/js/web/index-0d8c444bf1d4a1ba16548f9ab36ae9d8.js", id => modules[id]).Button, component);
+});
+
 test("exact desktop entry with cache key admits host exports and validates their contract", () => {
   const component = () => {};
   const modules: Record<number, any> = {
