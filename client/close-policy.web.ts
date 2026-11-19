@@ -6,7 +6,7 @@ declare const document: any;
 export type Choice = "close" | "archive" | "cancel";
 export type LayoutStore = { getState: () => any; subscribe: (callback: (state: any) => void) => () => void; persist?: any };
 export type CloseRequest = { workspaceKey: string; tabId: string; agentId: string; title?: string; isCurrent?: () => boolean };
-const VERSION = "0.4.6";
+const VERSION = "0.4.7";
 const STORAGE = "paseo-tabs.hidden-agents.v1";
 
 function allTabs(root: any): CloseTab[] {

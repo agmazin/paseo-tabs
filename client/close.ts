@@ -25,37 +25,60 @@ export function releaseCloseAgents(api: any) {
   for (const [id, entry] of agents) if (entry.api === api) agents.delete(id);
 }
 
+// The Metro id of the layout store differs between Paseo builds: the cache is kept per entry bundle,
+// and a store counts only if it holds the agent tabs visible on screen (another build's id may point to a lookalike).
+const bundleKey = () => {
+  const src = [...document.scripts].map((script: any) => String(script.src ?? "").split(/[?#]/)[0]).find(src => /\/static\/js\/web\/index-[0-9a-f]+\.js$/.test(src));
+  return `paseo-tabs.layout-module.v2:${src?.slice(src.lastIndexOf("/") + 1) ?? "unknown"}`;
+};
+const isLayoutStore = (value: any) => {
+  if (typeof value?.getState !== "function" || typeof value?.subscribe !== "function") return false;
+  const state = value.getState();
+  return !!state?.layoutByWorkspace && ["hideAgent", "unhideAgent", "closeTab", "openTab"].every(key => typeof state[key] === "function");
+};
+export const holdsVisibleTabs = (store: Store) => {
+  const visible = [...document.querySelectorAll(TAB)].map((node: any) => node.getAttribute("data-testid").slice("workspace-tab-".length)).filter((id: string) => id.startsWith("agent_"));
+  if (!visible.length) return true;
+  const known = new Set(Object.values(store.getState().layoutByWorkspace).flatMap((layout: any) => panes(layout.root).flatMap(pane => pane.tabs.map((tab: CloseTab) => tab.tabId))));
+  return visible.some((id: string) => known.has(id));
+};
+
 function cachedStore(): Store | null {
   try {
-    const id = Number(window.localStorage.getItem("paseo-tabs.layout-module.v1"));
+    window.localStorage.removeItem("paseo-tabs.layout-module.v1");
+    const id = Number(window.localStorage.getItem(bundleKey()));
     if (!id) return null;
-    for (const value of Object.values(window.__r?.(id) ?? {}) as any[]) {
-      const state = value?.getState?.();
-      if (state?.layoutByWorkspace && ["hideAgent", "unhideAgent", "closeTab", "openTab"].every(key => typeof state[key] === "function")) return value;
-    }
+    for (const value of Object.values(window.__r?.(id) ?? {}) as any[]) if (isLayoutStore(value)) return value;
   } catch {}
   return null;
 }
 
-export async function discoverLayoutStore(): Promise<Store | null> {
-  const cached = cachedStore();
-  if (cached) return cached;
+export async function discoverLayoutStore(skip?: Store): Promise<Store | null> {
+  if (!skip) {
+    const cached = cachedStore();
+    if (cached) return cached;
+  }
   const metro = window.__r;
   if (typeof metro !== "function") return null;
+  // Judge candidates against real tabs: wait for the tab strip, up to 15 s.
+  for (let i = 0; i < 75 && !document.querySelector(`${TAB}[data-testid^="workspace-tab-agent_"]`); i++) await new Promise(r => window.setTimeout(r, 200));
+  let first: Store | null = null;
   for (const script of document.scripts) {
     if (!script.src || !script.src.includes("/static/js/")) continue;
     const response = await fetch(script.src);
     if (!response.ok) continue;
     for (const id of moduleCandidateIds(await response.text())) {
-      const exports = metro(id);
-      for (const value of Object.values(exports) as any[]) {
-        if (typeof value?.getState !== "function" || typeof value?.subscribe !== "function") continue;
-        const state = value.getState();
-        if (state?.layoutByWorkspace && ["hideAgent", "unhideAgent", "closeTab", "openTab"].every(key => typeof state[key] === "function")) { window.localStorage.setItem("paseo-tabs.layout-module.v1", String(id)); return value; }
+      let exports: any;
+      try { exports = metro(id); } catch { continue; }
+      for (const value of Object.values(exports ?? {}) as any[]) {
+        if (value === skip || !isLayoutStore(value)) continue;
+        if (!holdsVisibleTabs(value)) { first ??= value; continue; }
+        window.localStorage.setItem(bundleKey(), String(id));
+        return value;
       }
     }
   }
-  return null;
+  return first;
 }
 
 function panes(root: any): any[] {
@@ -138,7 +161,10 @@ export function interceptClose(store: Store) {
       try {
         const found = fromNode(event.target);
         if (event.type === "click" && found?.tab.target.kind === "agent") void close(found.key, [found.tab]);
-        else if (event.type === "click") console.warn("[paseo-tabs] close: tab not found in layout", cross.getAttribute("data-testid"), found?.tab.target.kind);
+        else if (event.type === "click") {
+          console.warn("[paseo-tabs] close: tab not found in layout, looking for the store again", cross.getAttribute("data-testid"), found?.tab.target.kind);
+          window.__paseoTabsClose.rediscover?.(cross.getAttribute("data-testid"));
+        }
       } catch (error) { console.warn("[paseo-tabs] Cannot resolve close target; action cancelled", error); }
       return;
     }
@@ -237,8 +263,8 @@ function startClose(): () => void {
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
-      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.6");
-      console.warn("[paseo-tabs] close ready 0.4.6");
+      document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.7");
+      console.warn("[paseo-tabs] close ready 0.4.7");
       release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
@@ -248,9 +274,22 @@ function startClose(): () => void {
     }
     connectDispatcher();
   };
-  const cached = cachedStore();
-  if (cached) install(cached);
-  else void discoverLayoutStore().then(install).catch(error => { install(null); console.warn("[paseo-tabs] Layout discovery failed; close actions blocked", error); });
+  let current: Store | null = null;
+  const installed = install;
+  const track = (store: Store | null) => { current = store; installed(store); };
+  window.__paseoTabsClose.rediscover = (closeTestId?: string) => {
+    if (disposed) return;
+    void discoverLayoutStore(current ?? undefined).then(store => {
+      if (!store || store === current || disposed) { console.warn("[paseo-tabs] no other layout store found"); return; }
+      release?.();
+      track(store);
+      console.warn("[paseo-tabs] layout store replaced");
+      if (closeTestId) document.querySelector(`[data-testid="${closeTestId}"]`)?.click();
+    }).catch(error => console.warn("[paseo-tabs] layout rediscovery failed", error));
+  };
+  const cached = cachedStore() && holdsVisibleTabs(cachedStore()!) ? cachedStore() : null;
+  if (cached) track(cached);
+  else void discoverLayoutStore().then(track).catch(error => { track(null); console.warn("[paseo-tabs] Layout discovery failed; close actions blocked", error); });
   const timer = window.setInterval(connectDispatcher, 100);
   connectDispatcher();
   return () => { disposed = true; window.clearInterval(timer); release?.(); };
