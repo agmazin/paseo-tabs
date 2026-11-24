@@ -1,3 +1,4 @@
+import { installReopen } from "./reopen";
 import { getPaseoClient } from "@getpaseo/plugin/client";
 import { installClosePolicy, type CloseRequest } from "./close-policy.web";
 import { closeSelection, moduleCandidateIds, type CloseTab } from "../shared/close";
@@ -276,12 +277,13 @@ function startClose(): () => void {
     if (disposed) return;
     if (store) {
       installClosePolicy()?.attachStore(store);
+      const stopReopen = installReopen(store);
       const events = interceptClose(store);
       window.__paseoTabsClose.closeCurrent = events.closeCurrent;
       document.documentElement.setAttribute("data-paseo-tabs-close", "ready");
       document.documentElement.setAttribute("data-paseo-tabs-close-version", "0.4.8");
       console.warn("[paseo-tabs] close ready 0.4.8");
-      release = () => { events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
+      release = () => { stopReopen(); events.dispose(); document.documentElement.removeAttribute("data-paseo-tabs-close"); document.documentElement.removeAttribute("data-paseo-tabs-close-version"); };
     }
     else {
       window.__paseoTabsClose.unavailable = true;
@@ -314,7 +316,7 @@ function startClose(): () => void {
 export function mountClose(api?: any): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {};
   installClosePolicy();
-  const version = "0.4.2";
+  const version = "0.5.0";
   let state = window.__paseoTabsClose;
   if (!state || state.version !== version) {
     state?.dispose();

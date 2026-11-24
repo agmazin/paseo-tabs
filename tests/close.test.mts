@@ -29,7 +29,7 @@ test("fallback closes archived root/child locally and cancels stale or unknown s
   const module = { exports: {} as any };
   runInNewContext(`(function(require,module,exports){${source}\n})`, { console })((id: string) => {
     if (id === "@getpaseo/plugin/client") return {};
-    if (id === "./close-policy.web") return {};
+    if (id === "./reopen" || id === "./close-policy.web") return {};
     if (id === "../shared/close") return { closeSelection, moduleCandidateIds };
     throw new Error(id);
   }, module, module.exports);
